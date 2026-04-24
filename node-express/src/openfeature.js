@@ -1,29 +1,17 @@
-import {
-  OpenFeature,
-  AsyncLocalStorageTransactionContextPropagator,
-} from '@openfeature/server-sdk';
-import { FlagdProvider } from '@openfeature/flagd-provider';
-import { CustomHook } from './hook.js';
+import { OpenFeature, InMemoryProvider } from '@openfeature/server-sdk';
 
-// Initialize the flagd provider in file (in-process offline) mode, register
-// the custom hook, and set a global evaluation context with the Node version
-// so targeting rules can match on it.
-export async function initOpenFeature({
-  offlineFlagSourcePath = './flags.json',
-} = {}) {
-  OpenFeature.setTransactionContextPropagator(
-    new AsyncLocalStorageTransactionContextPropagator(),
-  );
-
-  OpenFeature.addHooks(new CustomHook());
-
-  OpenFeature.setContext({
-    nodeVersion: process.versions.node,
-  });
-
-  const provider = new FlagdProvider({
-    resolverType: 'in-process',
-    offlineFlagSourcePath,
+// Minimal in-memory provider: enough to serve the `greetings` flag with a
+// couple of variants so step 1 works end-to-end without flagd.
+export async function initOpenFeature() {
+  const provider = new InMemoryProvider({
+    greetings: {
+      defaultVariant: 'hello',
+      variants: {
+        hello: 'Hello World!',
+        goodbye: 'Goodbye World!',
+      },
+      disabled: false,
+    },
   });
 
   await OpenFeature.setProviderAndWait(provider);
