@@ -31,8 +31,6 @@ public class OpenFeatureConfig implements WebMvcConfigurer {
         attributes.put("springVersion", new Value(SpringVersion.getVersion()));
         ImmutableContext evaluationContext = new ImmutableContext(attributes);
         api.setEvaluationContext(evaluationContext);
-
-        api.addHooks(new CustomHook());
     }
 
     @Override
