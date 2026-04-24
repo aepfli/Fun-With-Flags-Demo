@@ -14,10 +14,4 @@ public class IndexController {
         Client client = OpenFeatureAPI.getInstance().getClient();
         return client.getStringDetails("greetings", "No World");
     }
-
-    @GetMapping("/error")
-    public FlagEvaluationDetails<Boolean> error() {
-        Client client = OpenFeatureAPI.getInstance().getClient();
-        return client.getBooleanDetails("greetings", false);
-    }
 }
