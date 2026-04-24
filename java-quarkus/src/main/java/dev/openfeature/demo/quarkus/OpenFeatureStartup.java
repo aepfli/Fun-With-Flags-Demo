@@ -1,5 +1,6 @@
 package dev.openfeature.demo.quarkus;
 
+import dev.openfeature.contrib.hooks.otel.TracesHook;
 import dev.openfeature.contrib.providers.flagd.Config;
 import dev.openfeature.contrib.providers.flagd.FlagdOptions;
 import dev.openfeature.contrib.providers.flagd.FlagdProvider;
@@ -39,5 +40,6 @@ public class OpenFeatureStartup {
 
         api.setTransactionContextPropagator(new ThreadLocalTransactionContextPropagator());
         api.addHooks(new CustomHook());
+        api.addHooks(new TracesHook());
     }
 }

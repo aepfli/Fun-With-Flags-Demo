@@ -184,3 +184,47 @@ class FlagdIntegrationTest {
 ```
 
 Run `./mvnw verify` — the container starts, the test passes, the container stops. No second terminal.
+
+## Step 6 OpenTelemetry tracing
+
+Hooks are a nice place to log flag evaluations, but logs only tell part of the story. Once requests start fanning out across services, what I really want is a trace that shows each flag evaluation as a span nested inside the HTTP request that caused it. OpenFeature ships an OTel hook for exactly that, and Quarkus ships an OTel extension that wires up the SDK, the OTLP exporter, and HTTP instrumentation out of the box — so flag spans become children of the request span with almost no code.
+
+Add the Quarkus OTel extension and the OpenFeature OTel hook to `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-opentelemetry</artifactId>
+</dependency>
+<dependency>
+    <groupId>dev.openfeature.contrib.hooks</groupId>
+    <artifactId>otel</artifactId>
+    <version>3.2.1</version>
+</dependency>
+```
+
+Point the exporter at the shared Jaeger in `src/main/resources/application.properties`:
+
+```properties
+quarkus.application.name=fun-with-flags-java-quarkus
+quarkus.otel.exporter.otlp.traces.endpoint=http://localhost:4317
+quarkus.otel.exporter.otlp.traces.protocol=grpc
+```
+
+Register the hook alongside the existing `CustomHook` in `OpenFeatureStartup.initProvider()`:
+
+```java
+api.addHooks(new CustomHook());
+api.addHooks(new TracesHook());
+```
+
+> Note: the 3.x line of the OTel hook renamed `OpenTelemetryHook` to `TracesHook` (and added a sibling `MetricsHook`). If you are pinning an older 1.x version, the class is still `OpenTelemetryHook`.
+
+Start the shared Jaeger backend, then run the app:
+
+```bash
+cd ../observability && docker compose up -d
+cd ../java-quarkus && ./mvnw quarkus:dev
+```
+
+Hit `curl http://localhost:8080/` a few times, open <http://localhost:16686>, pick the `fun-with-flags-java-quarkus` service, and you will see each HTTP request with a nested flag-evaluation span carrying the flag key, variant, and reason as attributes.

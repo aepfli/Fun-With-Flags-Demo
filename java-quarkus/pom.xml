@@ -58,6 +58,17 @@
 			<version>0.11.8</version>
 		</dependency>
 
+		<!-- OpenTelemetry: Quarkus extension + OpenFeature OTel hook -->
+		<dependency>
+			<groupId>io.quarkus</groupId>
+			<artifactId>quarkus-opentelemetry</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>dev.openfeature.contrib.hooks</groupId>
+			<artifactId>otel</artifactId>
+			<version>3.2.1</version>
+		</dependency>
+
 		<!-- Test dependencies -->
 		<dependency>
 			<groupId>io.quarkus</groupId>
