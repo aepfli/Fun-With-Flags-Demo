@@ -27,9 +27,15 @@ describe('Fun-With-Flags Node integration', () => {
         { content: flagsContent, target: '/flags.json' },
       ])
       .withCommand(['start', '--uri', 'file:/flags.json'])
-      .withWaitStrategy(Wait.forListeningPorts())
+      .withWaitStrategy(Wait.forLogMessage(/serving flag evaluation service|listening/i))
       .withStartupTimeout(60_000)
       .start();
+
+    // Dump container logs to stdout on any post-start failure so CI shows
+    // what flagd actually said.
+    (await container.logs())
+      .on('data', (line) => process.stdout.write(`[flagd] ${line}`))
+      .on('err', (line) => process.stderr.write(`[flagd err] ${line}`));
 
     const provider = new FlagdProvider({
       resolverType: 'rpc',
