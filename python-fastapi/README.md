@@ -1,6 +1,6 @@
 # OpenFeature Python Demo
 
-This is the Python variant of [Fun With Flags](../README.md), built on FastAPI. I added it because a lot of the OpenFeature conversations I have in workshops come from Python teams, and having a canonical Python end-to-end example makes those conversations much shorter. The step-by-step arc mirrors the [Spring Boot variant](../java/README.md) one-to-one.
+This is the Python variant of [Fun With Flags](../README.md), built on FastAPI. I added it because a lot of the OpenFeature conversations I have in workshops come from Python teams, and having a canonical Python end-to-end example makes those conversations much shorter. The step-by-step arc mirrors the [Spring Boot variant](../java-spring/README.md) one-to-one.
 
 Two things to flag up front as differences from the JVM versions:
 

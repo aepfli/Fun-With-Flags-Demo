@@ -1,6 +1,6 @@
 # OpenFeature Quarkus Demo
 
-This is the Quarkus variant of [Fun With Flags](../README.md). I wrote it because a lot of Java shops run Quarkus rather than Spring Boot, and I did not want anyone to have to translate a Spring tutorial in their head while also learning OpenFeature for the first time. The step-by-step arc mirrors the [Spring Boot variant](../java/README.md) one-to-one, so you can read them side by side.
+This is the Quarkus variant of [Fun With Flags](../README.md). I wrote it because a lot of Java shops run Quarkus rather than Spring Boot, and I did not want anyone to have to translate a Spring tutorial in their head while also learning OpenFeature for the first time. The step-by-step arc mirrors the [Spring Boot variant](../java-spring/README.md) one-to-one, so you can read them side by side.
 
 Two things to flag up front as differences from the Spring version:
 

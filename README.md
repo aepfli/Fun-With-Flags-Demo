@@ -12,11 +12,13 @@ I am a CNCF Ambassador, an OpenFeature maintainer, and I sit in the top three co
 
 | Folder | Stack |
 | --- | --- |
-| [`java/README.md`](java/README.md) | Java (Spring Boot) |
-| [`quarkus/README.md`](quarkus/README.md) | Java (Quarkus) |
-| [`go/README.md`](go/README.md) | Go |
-| [`python/README.md`](python/README.md) | Python (FastAPI) |
-| [`node/README.md`](node/README.md) | Node.js (Express) |
+| [`java-spring/README.md`](java-spring/README.md) | Java + Spring Boot |
+| [`java-quarkus/README.md`](java-quarkus/README.md) | Java + Quarkus |
+| [`go-chi/README.md`](go-chi/README.md) | Go + chi |
+| [`python-fastapi/README.md`](python-fastapi/README.md) | Python + FastAPI |
+| [`node-express/README.md`](node-express/README.md) | Node.js + Express |
+
+The folder name always reads `<language>-<framework>`, so adding a new variant later (`java-micronaut`, `python-flask`, `go-gin`, …) drops in alongside the existing ones without breaking the pattern.
 
 ## The same learning arc
 

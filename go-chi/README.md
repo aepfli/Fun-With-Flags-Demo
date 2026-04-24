@@ -1,6 +1,6 @@
 # OpenFeature Go Demo
 
-This is the Go variant of [Fun With Flags](../README.md). I added it so that people who write Go every day can see OpenFeature idiomatically rather than translating Java patterns in their head. The step-by-step arc mirrors the [Spring Boot variant](../java/README.md) one-to-one.
+This is the Go variant of [Fun With Flags](../README.md). I added it so that people who write Go every day can see OpenFeature idiomatically rather than translating Java patterns in their head. The step-by-step arc mirrors the [Spring Boot variant](../java-spring/README.md) one-to-one.
 
 Two things to flag up front as differences from the JVM versions:
 

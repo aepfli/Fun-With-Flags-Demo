@@ -39,5 +39,5 @@
       ]
     }
   },
-  "postCreateCommand": "bash -lc 'cd java && ./mvnw -q dependency:resolve || true; cd ../quarkus && ./mvnw -q dependency:resolve || true; cd ../go && go mod download || true; cd ../python && pip install -e . || true; cd ../node && npm ci || true'"
+  "postCreateCommand": "bash -lc 'cd java-spring && ./mvnw -q dependency:resolve || true; cd ../java-quarkus && ./mvnw -q dependency:resolve || true; cd ../go-chi && go mod download || true; cd ../python-fastapi && pip install -e . || true; cd ../node-express && npm ci || true'"
 }

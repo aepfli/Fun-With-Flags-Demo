@@ -25,7 +25,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/openfeature/fun-with-flags-demo/go/internal/middleware"
+	"github.com/openfeature/fun-with-flags-demo/go-chi/internal/middleware"
 )
 
 

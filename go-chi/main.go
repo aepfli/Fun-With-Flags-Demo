@@ -12,8 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/open-feature/go-sdk/openfeature"
 
-	flagdsetup "github.com/openfeature/fun-with-flags-demo/go/internal/flagd"
-	"github.com/openfeature/fun-with-flags-demo/go/internal/middleware"
+	flagdsetup "github.com/openfeature/fun-with-flags-demo/go-chi/internal/flagd"
+	"github.com/openfeature/fun-with-flags-demo/go-chi/internal/middleware"
 )
 
 func main() {

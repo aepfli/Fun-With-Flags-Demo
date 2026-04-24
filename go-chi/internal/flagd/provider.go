@@ -13,7 +13,7 @@ import (
 	flagdprovider "github.com/open-feature/go-sdk-contrib/providers/flagd/pkg"
 	"github.com/open-feature/go-sdk/openfeature"
 
-	"github.com/openfeature/fun-with-flags-demo/go/internal/hook"
+	"github.com/openfeature/fun-with-flags-demo/go-chi/internal/hook"
 )
 
 // Init configures OpenFeature with a flagd FILE-mode provider pointing at

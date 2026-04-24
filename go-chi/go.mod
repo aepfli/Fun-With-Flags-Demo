@@ -1,4 +1,4 @@
-module github.com/openfeature/fun-with-flags-demo/go
+module github.com/openfeature/fun-with-flags-demo/go-chi
 
 go 1.25.0
 

@@ -1,6 +1,6 @@
 # OpenFeature Node.js Demo
 
-This is the Node.js variant of [Fun With Flags](../README.md), built on Express. I added it because a lot of OpenFeature adopters ship on Node, and having an idiomatic Node example saves people the mental translation from a Java tutorial. The step-by-step arc mirrors the [Spring Boot variant](../java/README.md) one-to-one.
+This is the Node.js variant of [Fun With Flags](../README.md), built on Express. I added it because a lot of OpenFeature adopters ship on Node, and having an idiomatic Node example saves people the mental translation from a Java tutorial. The step-by-step arc mirrors the [Spring Boot variant](../java-spring/README.md) one-to-one.
 
 Two things to flag up front as differences from the JVM versions:
 
