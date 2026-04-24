@@ -3,7 +3,6 @@
     "greetings": {
       "state": "ENABLED",
       "variants": {
-        "noder": "Hi noder",
         "hallo": "Hallo Welt!",
         "hello": "Hello World!",
         "goodbye": "Goodbye World!"
@@ -11,8 +10,6 @@
       "defaultVariant": "hello",
       "targeting": {
         "if": [
-          { "sem_ver": [ { "var": "nodeVersion" }, ">=", "20.0.0" ] },
-          "noder",
           { "===": [ { "var": "language" }, "de" ] },
           "hallo"
         ]
