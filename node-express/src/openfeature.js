@@ -3,6 +3,7 @@ import {
   AsyncLocalStorageTransactionContextPropagator,
 } from '@openfeature/server-sdk';
 import { FlagdProvider } from '@openfeature/flagd-provider';
+import { SpanHook } from '@openfeature/open-telemetry-hooks';
 import { CustomHook } from './hook.js';
 
 // Initialize the flagd provider in file (in-process offline) mode, register
@@ -16,6 +17,9 @@ export async function initOpenFeature({
   );
 
   OpenFeature.addHooks(new CustomHook());
+  // Emits an OpenTelemetry span per flag evaluation, tagged with key/variant/reason,
+  // and parents it under the active request span from auto-instrumentation.
+  OpenFeature.addHooks(new SpanHook());
 
   OpenFeature.setContext({
     nodeVersion: process.versions.node,

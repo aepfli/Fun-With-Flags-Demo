@@ -1,3 +1,7 @@
+// Must be first: boots the OpenTelemetry SDK so auto-instrumentation can patch
+// Express/HTTP before they are required below.
+import './otel.js';
+
 import express from 'express';
 import { OpenFeature } from '@openfeature/server-sdk';
 import pino from 'pino';

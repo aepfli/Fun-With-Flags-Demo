@@ -153,3 +153,62 @@ const container = await new GenericContainer('ghcr.io/open-feature/flagd:latest'
 ```
 
 Run `npm test`. Vitest starts the container, runs the assertions against `?language=de` and the default greeting, and shuts the container down.
+
+## Step 6 OpenTelemetry tracing
+
+Logs from the custom hook are fine for local debugging, but once you have more than one service you want traces. This step wires OpenTelemetry into the app so every flag evaluation shows up as a span in Jaeger with the flag key, variant, and reason attached — nested underneath the Express request span so you can see exactly which handler asked for the flag. Auto-instrumentation covers Express and HTTP; the OpenFeature OTel hook handles the flag spans.
+
+```
+npm install @opentelemetry/api @opentelemetry/sdk-node \
+            @opentelemetry/auto-instrumentations-node \
+            @opentelemetry/exporter-trace-otlp-grpc \
+            @openfeature/open-telemetry-hooks
+```
+
+`src/otel.js` boots the SDK and points the OTLP/gRPC exporter at the shared Jaeger collector:
+
+```js
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+
+const sdk = new NodeSDK({
+  resource: resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: 'fun-with-flags-node-express',
+  }),
+  traceExporter: new OTLPTraceExporter({ url: 'http://localhost:4317' }),
+  instrumentations: [getNodeAutoInstrumentations()],
+});
+
+sdk.start();
+process.on('SIGTERM', () => sdk.shutdown());
+```
+
+The order of imports in `src/index.js` matters — auto-instrumentation patches modules at require-time, so `./otel.js` has to load before anything it needs to instrument:
+
+```js
+import './otel.js';  // must be first
+import express from 'express';
+// …rest of the imports
+```
+
+Register the OpenFeature OTel span hook alongside the existing custom hook in `src/openfeature.js`:
+
+```js
+import { SpanHook } from '@openfeature/open-telemetry-hooks';
+
+OpenFeature.addHooks(new CustomHook());
+OpenFeature.addHooks(new SpanHook());
+```
+
+Run it:
+
+```
+cd ../observability && docker compose up -d   # Jaeger + OTLP collector on :4317
+cd ../node-express && node src/index.js
+curl http://localhost:8080/
+```
+
+Open <http://localhost:16686>, pick the `fun-with-flags-node-express` service from the dropdown, and you should see a request span with a child `feature_flag` span carrying `feature_flag.key`, `feature_flag.variant`, and `feature_flag.result.reason`.
