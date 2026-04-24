@@ -400,3 +400,131 @@ So let's use flagd as a standalone process to fetch feature flag configurations.
 There are two different behaviours we can observe depending on the mode
 - RPC: everytime we evaluate a flag, we will query flagd for the evaluation.
 - IN_PROCESS: we will be fetching the flag configuration, and only if there is an update to the flags.json, we will get a change event.
+
+## Step 6 OpenTelemetry
+
+Observability is one of the superpowers OpenFeature unlocks: every flag evaluation can be emitted as a distributed-tracing span, neatly nested inside the HTTP request that triggered it. With a single hook the workshop audience sees the exact flag key, variant, and reason inside Jaeger — no bespoke logging, no custom correlation id dance.
+
+For this step we use the upstream `otel` contrib hook together with the OpenTelemetry SDK autoconfigure module, which builds an `OpenTelemetry` instance exporting via OTLP/gRPC. The shared Jaeger container from [`../observability`](../observability) accepts traces on port `4317`.
+
+### Step 6.1 Add dependencies
+
+Import the OpenTelemetry BOMs and add the contrib hook plus the SDK/exporter. Pinning via BOM keeps every OTel module on a single, consistent version.
+
+```xml
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-bom</artifactId>
+      <version>1.48.0</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry.instrumentation</groupId>
+      <artifactId>opentelemetry-instrumentation-bom</artifactId>
+      <version>2.14.0</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+
+<dependencies>
+  <dependency>
+    <groupId>dev.openfeature.contrib.hooks</groupId>
+    <artifactId>otel</artifactId>
+    <version>3.2.1</version>
+  </dependency>
+  <dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-api</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-sdk</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-exporter-otlp</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
+  </dependency>
+</dependencies>
+```
+
+> Note: At the time of writing, the canonical `opentelemetry-spring-boot-starter` had not yet been released for Spring Boot 4. We therefore use the direct SDK + autoconfigure shape, which works identically for the demo. When the starter catches up, swap these dependencies for the starter and drop the `OpenTelemetryConfig` bean below.
+
+### Step 6.2 Configure the OpenTelemetry SDK
+
+Create an `OpenTelemetryConfig` that builds the global SDK using the autoconfigure module. Properties from `application.properties` flow through as system properties so the SDK picks them up.
+
+```java
+@Configuration
+public class OpenTelemetryConfig {
+
+    @Bean
+    public OpenTelemetry openTelemetry(
+            @Value("${otel.service.name:fun-with-flags-java-spring}") String serviceName,
+            @Value("${otel.exporter.otlp.endpoint:http://localhost:4317}") String otlpEndpoint) {
+        System.setProperty("otel.service.name", serviceName);
+        System.setProperty("otel.exporter.otlp.endpoint", otlpEndpoint);
+        System.setProperty("otel.traces.exporter", "otlp");
+        System.setProperty("otel.metrics.exporter", "none");
+        System.setProperty("otel.logs.exporter", "none");
+
+        return AutoConfiguredOpenTelemetrySdk.builder()
+                .setResultAsGlobal()
+                .build()
+                .getOpenTelemetrySdk();
+    }
+}
+```
+
+Point the app at Jaeger in `application.properties`:
+
+```properties
+otel.service.name=fun-with-flags-java-spring
+otel.exporter.otlp.endpoint=http://localhost:4317
+otel.traces.exporter=otlp
+otel.metrics.exporter=none
+otel.logs.exporter=none
+```
+
+### Step 6.3 Register the OpenFeature OTel hook
+
+The contrib hook creates a span for every flag evaluation, tagged with the flag key, variant, and reason — automatically nested inside whichever span is current (the Spring HTTP request, in our case).
+
+```java
+import dev.openfeature.contrib.hooks.otel.TracesHook;
+
+@PostConstruct
+public void initProvider() {
+    // ... existing provider setup ...
+    api.addHooks(new CustomHook());
+    api.addHooks(new TracesHook());
+}
+```
+
+> Note: In the 3.2.1 release the class is called `TracesHook` (the companion `MetricsHook` covers metrics). Older docs reference `OpenTelemetryHook` — same idea, newer name.
+
+### Step 6.4 Run it
+
+1. Start the shared observability stack (from the repo root):
+   ```bash
+   cd ../observability && docker compose up -d
+   ```
+2. Start flagd and the Spring Boot app as in earlier steps:
+   ```bash
+   docker compose up -d   # starts flagd
+   ./mvnw spring-boot:run
+   ```
+3. Hit the endpoint a few times to generate traffic:
+   ```bash
+   curl http://localhost:8080/
+   curl 'http://localhost:8080/?language=de'
+   ```
+4. Open Jaeger at <http://localhost:16686>, select the `fun-with-flags-java-spring` service, and inspect a trace. You should see the HTTP request span with the flag evaluation span nested inside, carrying `feature_flag.key`, variant, and reason attributes.

@@ -1,5 +1,6 @@
 package dev.openfeature.demo.java.demo;
 
+import dev.openfeature.contrib.hooks.otel.TracesHook;
 import dev.openfeature.contrib.providers.flagd.Config;
 import dev.openfeature.contrib.providers.flagd.FlagdOptions;
 import dev.openfeature.contrib.providers.flagd.FlagdProvider;
@@ -17,6 +18,14 @@ import java.util.HashMap;
 @Configuration
 public class OpenFeatureConfig implements WebMvcConfigurer {
 
+    // Depend on the OpenTelemetry bean so the global SDK is initialized
+    // before the first flag evaluation happens inside initProvider().
+    private final io.opentelemetry.api.OpenTelemetry openTelemetry;
+
+    public OpenFeatureConfig(io.opentelemetry.api.OpenTelemetry openTelemetry) {
+        this.openTelemetry = openTelemetry;
+    }
+
     @PostConstruct
     public void initProvider() {
         OpenFeatureAPI api = OpenFeatureAPI.getInstance();
@@ -33,6 +42,7 @@ public class OpenFeatureConfig implements WebMvcConfigurer {
         api.setEvaluationContext(evaluationContext);
 
         api.addHooks(new CustomHook());
+        api.addHooks(new TracesHook());
     }
 
     @Override
