@@ -9,7 +9,7 @@
       "version": "21"
     }
   },
-  "forwardPorts": [8080, 8013, 8014, 8015, 8016],
+  "forwardPorts": [8080, 8013, 8014, 8015, 8016, 16686, 4317, 4318],
   "portsAttributes": {
     "8080": {
       "label": "App"
@@ -25,6 +25,15 @@
     },
     "8016": {
       "label": "flagd sync"
+    },
+    "16686": {
+      "label": "Jaeger UI"
+    },
+    "4317": {
+      "label": "OTLP gRPC"
+    },
+    "4318": {
+      "label": "OTLP HTTP"
     }
   },
   "customizations": {

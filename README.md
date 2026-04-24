@@ -37,6 +37,8 @@ Port `8080` is the app under test. Ports `8013`–`8016` are flagd (gRPC, HTTP, 
 
 The canonical, always-current deck lives at **<https://schrottner.at/openFeatureTalk>**. A snapshot is checked in as [`Fun with Flags.pdf`](Fun%20with%20Flags.pdf) at the repo root for workshops where the wifi does not cooperate.
 
-## What's next
+## Step 6 — observability
 
-OpenTelemetry tracking is wired up on the `demo/with-tracking` branch, but only for the Java Spring Boot folder today. Bringing that hook + exporter story to the other four languages is the next thing on my list — PRs welcome.
+Step 6 adds OpenTelemetry tracing so flag evaluations show up as spans alongside the rest of the app's request telemetry. A single [`observability/`](observability/README.md) folder at the repo root holds the shared Jaeger container — one backend for all five variants. Each language's step 6 lives on `step/<folder>/6` and adds its OTel hook + exporter config.
+
+The legacy `demo/with-tracking` branch is kept around for anyone who bookmarked it, but the step-6 branches supersede it.
