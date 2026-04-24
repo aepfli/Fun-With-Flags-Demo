@@ -3,7 +3,6 @@
     "greetings": {
       "state": "ENABLED",
       "variants": {
-        "pythonista": "Hi pythonista",
         "hallo": "Hallo Welt!",
         "hello": "Hello World!",
         "goodbye": "Goodbye World!"
@@ -11,8 +10,6 @@
       "defaultVariant": "hello",
       "targeting": {
         "if": [
-          { "sem_ver": [ { "var": "pythonVersion" }, ">=", "3.10.0" ] },
-          "pythonista",
           { "===": [ { "var": "language" }, "de" ] },
           "hallo"
         ]

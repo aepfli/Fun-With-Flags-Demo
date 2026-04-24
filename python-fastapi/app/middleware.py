@@ -11,7 +11,6 @@ from contextvars import ContextVar
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
 from starlette.types import ASGIApp
 
 # Module-level ContextVar — the OpenFeature propagator reads this in the handler.

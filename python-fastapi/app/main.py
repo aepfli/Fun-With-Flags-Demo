@@ -1,4 +1,4 @@
-"""FastAPI entry point — mirrors the Spring Boot end-state controller."""
+"""FastAPI entry point — language is lifted from a middleware into a ContextVar."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """FastAPI lifespan — set provider + global context on startup, tear down on stop."""
+    """FastAPI lifespan — set provider on startup, tear down on stop."""
     configure_openfeature()
     try:
         yield
