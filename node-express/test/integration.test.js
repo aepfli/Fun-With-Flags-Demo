@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GenericContainer } from 'testcontainers';
-import request from 'supertest';
+import { GenericContainer, Wait } from 'testcontainers';
+import { OpenFeature } from '@openfeature/server-sdk';
+import { FlagdProvider } from '@openfeature/flagd-provider';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const flagsPath = path.resolve(__dirname, '..', 'flags.json');
@@ -11,45 +12,40 @@ const flagsPath = path.resolve(__dirname, '..', 'flags.json');
 const SETUP_TIMEOUT_MS = 120_000;
 
 describe('Fun-With-Flags Node integration', () => {
-  let flagd;
-  let app;
+  let container;
 
   beforeAll(async () => {
-    flagd = await new GenericContainer('ghcr.io/open-feature/flagd:latest')
+    container = await new GenericContainer('ghcr.io/open-feature/flagd:latest')
       .withExposedPorts(8013)
-      .withBindMounts([
-        {
-          source: flagsPath,
-          target: '/flags.json',
-          mode: 'ro',
-        },
+      .withCopyFilesToContainer([
+        { source: flagsPath, target: '/flags.json' },
       ])
       .withCommand(['start', '--uri', 'file:/flags.json'])
+      .withWaitStrategy(Wait.forListeningPorts())
       .start();
 
-    process.env.FLAGD_HOST = flagd.getHost();
-    process.env.FLAGD_PORT = String(flagd.getMappedPort(8013));
-
-    // Import lazily so the provider picks up the FLAGD_* env vars above.
-    const { createApp } = await import('../src/index.js');
-    app = await createApp();
+    const provider = new FlagdProvider({
+      resolverType: 'rpc',
+      host: container.getHost(),
+      port: container.getMappedPort(8013),
+    });
+    await OpenFeature.setProviderAndWait(provider);
   }, SETUP_TIMEOUT_MS);
 
   afterAll(async () => {
-    if (flagd) {
-      await flagd.stop();
+    await OpenFeature.close();
+    if (container) {
+      await container.stop();
     }
   });
 
   it('returns the default English greeting', async () => {
-    const response = await request(app).get('/');
-    expect(response.status).toBe(200);
-    expect(response.body.value).toBe('Hello World!');
+    const details = await OpenFeature.getClient().getStringDetails('greetings', 'Hello World');
+    expect(details.value).toBe('Hello World!');
   });
 
   it('returns the German greeting when language=de', async () => {
-    const response = await request(app).get('/').query({ language: 'de' });
-    expect(response.status).toBe(200);
-    expect(response.body.value).toBe('Hallo Welt!');
+    const details = await OpenFeature.getClient().getStringDetails('greetings', 'Hello World', { language: 'de' });
+    expect(details.value).toBe('Hallo Welt!');
   });
 });

@@ -3,90 +3,68 @@ package dev.openfeature.demo.java.demo;
 import dev.openfeature.contrib.providers.flagd.Config;
 import dev.openfeature.contrib.providers.flagd.FlagdOptions;
 import dev.openfeature.contrib.providers.flagd.FlagdProvider;
+import dev.openfeature.sdk.Client;
+import dev.openfeature.sdk.FlagEvaluationDetails;
 import dev.openfeature.sdk.ImmutableContext;
 import dev.openfeature.sdk.OpenFeatureAPI;
 import dev.openfeature.sdk.Value;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.context.annotation.Bean;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
-import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Integration test that spins up a real flagd container with testcontainers and evaluates flags
+ * against it via a fresh OpenFeature client. No Spring context is booted, which keeps this test
+ * independent of {@link OpenFeatureConfig}'s {@code @PostConstruct} wiring and makes it easy to
+ * reason about which targeting rules fire.
+ *
+ * <p>Mirrors the shape of {@code go-chi/integration_test.go}: testcontainers owns the flagd
+ * lifecycle, an OpenFeature client is pointed at its mapped port, and the expected variant is
+ * asserted for the default and German cases.
+ */
 @Testcontainers
-@SpringBootTest(
-        webEnvironment = WebEnvironment.RANDOM_PORT,
-        classes = {DemoApplication.class, FlagdIntegrationTest.TestOverrideConfig.class})
 class FlagdIntegrationTest {
 
     @Container
     static final GenericContainer<?> FLAGD = new GenericContainer<>("ghcr.io/open-feature/flagd:latest")
             .withExposedPorts(8013)
-            .withCopyFileToContainer(MountableFile.forHostPath("flags.json"), "/flags.json")
-            .withCommand("start", "--uri", "file:./flags.json")
+            .withCopyFileToContainer(MountableFile.forHostPath("./flags.json"), "/flags.json")
+            .withCommand("start", "--uri", "file:/flags.json")
             .waitingFor(Wait.forListeningPort());
 
-    @DynamicPropertySource
-    static void flagdProps(DynamicPropertyRegistry registry) {
-        registry.add("flagd.host", FLAGD::getHost);
-        registry.add("flagd.port", () -> FLAGD.getMappedPort(8013));
-    }
-
-    @Autowired
-    private TestRestTemplate restTemplate;
-
-    @Test
-    void returnsHelloWorldByDefault() {
-        String body = restTemplate.getForObject("/", String.class);
-        assertThat(body).contains("Hello World");
+    private Client openFeatureClient() {
+        FlagdProvider provider = new FlagdProvider(FlagdOptions.builder()
+                .resolverType(Config.Resolver.RPC)
+                .host(FLAGD.getHost())
+                .port(FLAGD.getMappedPort(8013))
+                .build());
+        OpenFeatureAPI api = OpenFeatureAPI.getInstance();
+        api.setProviderAndWait(provider);
+        return api.getClient();
     }
 
     @Test
-    void returnsHalloWeltForGermanLanguage() {
-        String body = restTemplate.getForObject("/?language=de", String.class);
-        assertThat(body).contains("Hallo Welt");
+    void defaultGreeting() {
+        // No springVersion and no language context is set here (Spring isn't booted), so the
+        // first targeting rule (sem_ver on springVersion) evaluates false, the language check
+        // evaluates false, and flagd falls back to the default variant "hello".
+        FlagEvaluationDetails<String> details =
+                openFeatureClient().getStringDetails("greetings", "Hello World");
+        assertThat(details.getValue()).isEqualTo("Hello World!");
     }
 
-    /**
-     * Overrides the provider wired by {@link OpenFeatureConfig} after the context has started.
-     * Spring runs {@link ApplicationRunner} beans AFTER every {@code @PostConstruct}, so this
-     * reliably replaces the default-port provider with one that points at the container's
-     * mapped port, and pins the Spring version evaluation context so the targeting rules
-     * resolve to "hello"/"hallo" instead of the "springer" branch.
-     */
-    @TestConfiguration
-    static class TestOverrideConfig {
-
-        @Bean
-        ApplicationRunner pointProviderAtContainer(
-                @org.springframework.beans.factory.annotation.Value("${flagd.host}") String host,
-                @org.springframework.beans.factory.annotation.Value("${flagd.port}") int port) {
-            return args -> {
-                OpenFeatureAPI api = OpenFeatureAPI.getInstance();
-                FlagdOptions options = FlagdOptions.builder()
-                        .resolverType(Config.Resolver.RPC)
-                        .host(host)
-                        .port(port)
-                        .build();
-                api.setProviderAndWait(new FlagdProvider(options));
-
-                HashMap<String, Value> attributes = new HashMap<>();
-                attributes.put("springVersion", new Value("0.0.0"));
-                api.setEvaluationContext(new ImmutableContext(attributes));
-            };
-        }
+    @Test
+    void germanGreeting() {
+        Map<String, Value> attributes = Map.of("language", new Value("de"));
+        FlagEvaluationDetails<String> details = openFeatureClient()
+                .getStringDetails("greetings", "Hello World", new ImmutableContext(attributes));
+        assertThat(details.getValue()).isEqualTo("Hallo Welt!");
     }
 }

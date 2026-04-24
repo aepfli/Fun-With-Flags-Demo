@@ -6,7 +6,7 @@
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/java:1": {
-      "version": "17"
+      "version": "21"
     }
   },
   "forwardPorts": [8080, 8013, 8014, 8015, 8016],
