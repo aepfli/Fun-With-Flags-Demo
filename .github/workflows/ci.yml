@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs when a new commit arrives on the same PR/branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  java:
+    name: java (spring boot)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: java
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+      - name: Compile
+        run: ./mvnw -B -q compile test-compile
+      - name: Test (Testcontainers)
+        run: ./mvnw -B verify
+
+  quarkus:
+    name: quarkus
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quarkus
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+      - name: Compile
+        run: ./mvnw -B -q clean compile test-compile
+      - name: Test (Testcontainers)
+        run: ./mvnw -B verify
+
+  go:
+    name: go
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: go/go.sum
+      - name: Build + vet
+        run: |
+          go build ./...
+          go vet ./...
+      - name: Test (Testcontainers)
+        run: go test ./...
+
+  python:
+    name: python (fastapi)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+      - name: Import check
+        run: python -c "from app.main import app; print('ok:', app)"
+      - name: Test (Testcontainers)
+        run: pytest -v
+
+  node:
+    name: node (express)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: node/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Syntax check
+        run: node --check src/index.js src/openfeature.js src/middleware.js src/hook.js
+      - name: Test (Testcontainers)
+        run: npm test
