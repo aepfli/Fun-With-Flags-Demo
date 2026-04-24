@@ -1,7 +1,4 @@
-"""OpenFeature wiring — provider, hooks, and the global evaluation context.
-
-This module is called from the FastAPI lifespan handler at startup and shutdown.
-"""
+"""OpenFeature wiring — flagd FILE provider plus a global pythonVersion context."""
 
 from __future__ import annotations
 
@@ -15,8 +12,6 @@ from openfeature.contrib.provider.flagd.config import ResolverType
 from openfeature.evaluation_context import EvaluationContext
 from openfeature.transaction_context import ContextVarsTransactionContextPropagator
 
-from app.hook import CustomHook
-
 LOG = logging.getLogger("app.openfeature_setup")
 
 
@@ -27,9 +22,7 @@ def python_version_string() -> str:
 
 
 def configure_openfeature() -> None:
-    """Wire up the flagd FILE provider, register the hook, set global context."""
-
-    # Flagd FILE mode — reads ./flags.json from the process working directory.
+    """Wire up the flagd FILE provider and set the global evaluation context."""
     flags_path = os.environ.get("FLAGS_PATH", "./flags.json")
     provider = FlagdProvider(
         resolver_type=ResolverType.FILE,
@@ -39,9 +32,6 @@ def configure_openfeature() -> None:
 
     # ContextVar-based propagator — asyncio-safe equivalent of ThreadLocal.
     api.set_transaction_context_propagator(ContextVarsTransactionContextPropagator())
-
-    # Custom hook logs every evaluation.
-    api.add_hooks([CustomHook()])
 
     # Global evaluation context — pythonVersion is compared against a sem_ver target.
     api.set_evaluation_context(
