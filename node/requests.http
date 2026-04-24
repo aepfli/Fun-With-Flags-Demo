@@ -1,0 +1,35 @@
+### Step 1.0: Getting started
+GET http://localhost:8080/
+
+### Step 1.1: With OpenFeature SDK
+
+GET http://localhost:8080/
+
+### Step 1.2: with a InMemory Provider
+
+GET http://localhost:8080/
+
+### Step 2.1: with a Flagd File Provider
+
+GET http://localhost:8080/
+
+### Step 3.1: Dynamic Context
+
+# GET http://localhost:8080/
+GET http://localhost:8080/?language=de
+
+### Step 3.1.1: middleware
+
+GET http://localhost:8080/?language=de
+
+### Step 3.2: Global Context
+
+GET http://localhost:8080/?language=de
+
+### Step 4.1: hooks
+
+GET http://localhost:8080/?language=de
+
+### Step 4.1.1: error
+
+GET http://localhost:8080/error

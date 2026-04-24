@@ -1,0 +1,43 @@
+// Dev container for the Fun With Flags polyglot OpenFeature demo.
+// One container, five languages — so the talk doesn't stall on a toolchain install.
+{
+  "name": "Fun With Flags",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17"
+    }
+  },
+  "forwardPorts": [8080, 8013, 8014, 8015, 8016],
+  "portsAttributes": {
+    "8080": {
+      "label": "App"
+    },
+    "8013": {
+      "label": "flagd gRPC"
+    },
+    "8014": {
+      "label": "flagd HTTP"
+    },
+    "8015": {
+      "label": "flagd sync"
+    },
+    "8016": {
+      "label": "flagd sync"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "redhat.java",
+        "golang.go",
+        "ms-python.python",
+        "dbaeumer.vscode-eslint",
+        "humao.rest-client"
+      ]
+    }
+  },
+  "postCreateCommand": "bash -lc 'cd java && ./mvnw -q dependency:resolve || true; cd ../quarkus && ./mvnw -q dependency:resolve || true; cd ../go && go mod download || true; cd ../python && pip install -e . || true; cd ../node && npm ci || true'"
+}

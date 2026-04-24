@@ -1,0 +1,37 @@
+{
+  "flags": {
+    "greetings": {
+      "state": "ENABLED",
+      "variants": {
+        "springer": "Hi springer",
+        "hallo": "Hallo Welt!",
+        "hello": "Hello World!",
+        "goodbye": "Goodbye World!"
+      },
+      "defaultVariant": "hello",
+      "targeting": {
+        "if": [
+          {
+            "sem_ver": [
+              {
+                "var": "springVersion"
+              },
+              ">=",
+              "3.0.0"
+            ]
+          },
+          "springer",
+          {
+            "===": [
+              {
+                "var": "language"
+              },
+              "de"
+            ]
+          },
+          "hallo"
+        ]
+      }
+    }
+  }
+}

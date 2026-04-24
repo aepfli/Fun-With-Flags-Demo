@@ -1,6 +1,7 @@
 
-/target
-/.idea
-demo.iml
 .env.local
+/.idea
+/target
+demo.iml
 opentelemetry-javaagent.jar
+target/

@@ -1,0 +1,22 @@
+{
+  "flags": {
+    "greetings": {
+      "state": "ENABLED",
+      "variants": {
+        "gopher": "Hi gopher",
+        "hallo": "Hallo Welt!",
+        "hello": "Hello World!",
+        "goodbye": "Goodbye World!"
+      },
+      "defaultVariant": "hello",
+      "targeting": {
+        "if": [
+          { "sem_ver": [ { "var": "goVersion" }, ">=", "1.20.0" ] },
+          "gopher",
+          { "===": [ { "var": "language" }, "de" ] },
+          "hallo"
+        ]
+      }
+    }
+  }
+}
