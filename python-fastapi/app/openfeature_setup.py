@@ -1,59 +1,35 @@
-"""OpenFeature wiring — provider, hooks, and the global evaluation context.
-
-This module is called from the FastAPI lifespan handler at startup and shutdown.
-"""
+"""OpenFeature wiring — InMemoryProvider with a `greetings` flag."""
 
 from __future__ import annotations
 
 import logging
-import os
-import sys
 
 from openfeature import api
-from openfeature.contrib.provider.flagd import FlagdProvider
-from openfeature.contrib.provider.flagd.config import ResolverType
-from openfeature.evaluation_context import EvaluationContext
-from openfeature.transaction_context import ContextVarsTransactionContextPropagator
-
-from app.hook import CustomHook
+from openfeature.provider.in_memory_provider import InMemoryFlag, InMemoryProvider
 
 LOG = logging.getLogger("app.openfeature_setup")
 
 
-def python_version_string() -> str:
-    """Return `sys.version_info` assembled as `major.minor.micro`."""
-    info = sys.version_info
-    return f"{info.major}.{info.minor}.{info.micro}"
-
-
 def configure_openfeature() -> None:
-    """Wire up the flagd FILE provider, register the hook, set global context."""
-
-    # Flagd FILE mode — reads ./flags.json from the process working directory.
-    flags_path = os.environ.get("FLAGS_PATH", "./flags.json")
-    provider = FlagdProvider(
-        resolver_type=ResolverType.FILE,
-        offline_flag_source_path=flags_path,
+    """Register the in-memory provider with hello/goodbye variants."""
+    provider = InMemoryProvider(
+        {
+            "greetings": InMemoryFlag(
+                default_variant="hello",
+                variants={
+                    "hello": "Hello World!",
+                    "goodbye": "Goodbye World!",
+                },
+            ),
+        }
     )
     api.set_provider(provider)
-
-    # ContextVar-based propagator — asyncio-safe equivalent of ThreadLocal.
-    api.set_transaction_context_propagator(ContextVarsTransactionContextPropagator())
-
-    # Custom hook logs every evaluation.
-    api.add_hooks([CustomHook()])
-
-    # Global evaluation context — pythonVersion is compared against a sem_ver target.
-    api.set_evaluation_context(
-        EvaluationContext(attributes={"pythonVersion": python_version_string()})
-    )
-
-    LOG.info("OpenFeature configured — flags file: %s", flags_path)
+    LOG.info("OpenFeature configured with InMemoryProvider")
 
 
 def shutdown_openfeature() -> None:
-    """Cleanly shut the provider down so gRPC channels close."""
+    """Cleanly shut the provider down."""
     try:
         api.shutdown()
-    except Exception:  # pragma: no cover — best-effort cleanup
+    except Exception:  # pragma: no cover
         LOG.warning("OpenFeature shutdown raised", exc_info=True)
