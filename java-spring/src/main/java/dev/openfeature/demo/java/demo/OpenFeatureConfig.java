@@ -1,42 +1,33 @@
 package dev.openfeature.demo.java.demo;
 
-import dev.openfeature.contrib.providers.flagd.Config;
-import dev.openfeature.contrib.providers.flagd.FlagdOptions;
-import dev.openfeature.contrib.providers.flagd.FlagdProvider;
-import dev.openfeature.sdk.ImmutableContext;
 import dev.openfeature.sdk.OpenFeatureAPI;
-import dev.openfeature.sdk.Value;
+import dev.openfeature.sdk.providers.memory.Flag;
+import dev.openfeature.sdk.providers.memory.InMemoryProvider;
 import jakarta.annotation.PostConstruct;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.SpringVersion;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.HashMap;
+import java.util.Map;
 
 @Configuration
-public class OpenFeatureConfig implements WebMvcConfigurer {
+public class OpenFeatureConfig {
 
     @PostConstruct
     public void initProvider() {
         OpenFeatureAPI api = OpenFeatureAPI.getInstance();
-        FlagdOptions flagdOptions = FlagdOptions.builder()
-                .resolverType(Config.Resolver.RPC)
-                .offlineFlagSourcePath("./flags.json")
+
+        Map<String, Object> variants = new HashMap<>();
+        variants.put("hello", "Hello World!");
+        variants.put("goodbye", "Goodbye World!");
+
+        Flag<String> greetings = Flag.<String>builder()
+                .variants(variants)
+                .defaultVariant("hello")
                 .build();
 
-        api.setProviderAndWait(new FlagdProvider(flagdOptions));
+        Map<String, Flag<?>> flags = new HashMap<>();
+        flags.put("greetings", greetings);
 
-        HashMap<String, Value> attributes = new HashMap<>();
-        attributes.put("springVersion", new Value(SpringVersion.getVersion()));
-        ImmutableContext evaluationContext = new ImmutableContext(attributes);
-        api.setEvaluationContext(evaluationContext);
-
-        api.addHooks(new CustomHook());
-    }
-
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new LanguageInterceptor());
+        api.setProviderAndWait(new InMemoryProvider(flags));
     }
 }
