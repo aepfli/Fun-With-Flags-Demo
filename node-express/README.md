@@ -153,3 +153,9 @@ const container = await new GenericContainer('ghcr.io/open-feature/flagd:latest'
 ```
 
 Run `npm test`. Vitest starts the container, runs the assertions against `?language=de` and the default greeting, and shuts the container down.
+
+## Step 6 OpenTelemetry observability
+
+Every flag evaluation becomes a span in Jaeger, nested under the HTTP request span that triggered it. The code lives on [`step/node-express/6`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/node-express/6); the shared Jaeger container lives in [`../observability/`](../observability/README.md).
+
+Run `cd ../observability && docker compose up -d`, check out `step/node-express/6`, and start the app with `node src/index.js`. Jaeger UI at <http://localhost:16686>, pick the `fun-with-flags-node-express` service.

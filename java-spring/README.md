@@ -400,3 +400,9 @@ So let's use flagd as a standalone process to fetch feature flag configurations.
 There are two different behaviours we can observe depending on the mode
 - RPC: everytime we evaluate a flag, we will query flagd for the evaluation.
 - IN_PROCESS: we will be fetching the flag configuration, and only if there is an update to the flags.json, we will get a change event.
+
+## Step 6 OpenTelemetry observability
+
+Every flag evaluation becomes a span in Jaeger, nested under the HTTP request span that triggered it. The code lives on [`step/java-spring/6`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/java-spring/6); the shared Jaeger container lives in [`../observability/`](../observability/README.md).
+
+Run `cd ../observability && docker compose up -d`, check out `step/java-spring/6`, start the app. Jaeger UI at <http://localhost:16686>, pick the `fun-with-flags-java-spring` service — one span per evaluation with the flag key, variant, and reason attached as attributes.

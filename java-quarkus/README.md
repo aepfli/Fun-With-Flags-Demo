@@ -184,3 +184,9 @@ class FlagdIntegrationTest {
 ```
 
 Run `./mvnw verify` — the container starts, the test passes, the container stops. No second terminal.
+
+## Step 6 OpenTelemetry observability
+
+Every flag evaluation becomes a span in Jaeger, nested under the HTTP request span that triggered it. The code lives on [`step/java-quarkus/6`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/java-quarkus/6); the shared Jaeger container lives in [`../observability/`](../observability/README.md).
+
+Run `cd ../observability && docker compose up -d`, check out `step/java-quarkus/6`, and start the app with `./mvnw quarkus:dev`. Jaeger UI at <http://localhost:16686>, pick the `fun-with-flags-java-quarkus` service.
