@@ -1,6 +1,6 @@
-// Package main is the entry point for the Fun With Flags Go demo. It wires the
-// flagd provider, adds the language middleware and serves a single GET /
-// endpoint that returns the evaluation of the "greetings" flag.
+// Package main is the entry point for the Fun With Flags Go demo. Step 2.1
+// wires the flagd FILE-mode provider against a local flags.json. No targeting
+// context is passed yet, so evaluation returns the default variant.
 package main
 
 import (
@@ -13,7 +13,6 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 
 	flagdsetup "github.com/openfeature/fun-with-flags-demo/go-chi/internal/flagd"
-	"github.com/openfeature/fun-with-flags-demo/go-chi/internal/middleware"
 )
 
 func main() {
@@ -22,12 +21,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := openfeature.NewClient("fun-with-flags-go")
+	client := openfeature.NewClient("demo")
 
 	r := chi.NewRouter()
-	r.Use(middleware.Language)
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		details, err := client.StringValueDetails(r.Context(), "greetings", "Hello World", openfeature.EvaluationContext{})
+		details, err := client.StringValueDetails(r.Context(), "greetings", "No World", openfeature.EvaluationContext{})
 		if err != nil {
 			slog.Error("evaluation failed", "err", err)
 		}
