@@ -1,28 +1,17 @@
-// Package flagd sets up the flagd provider, registers our custom hook and
-// installs a global evaluation context that carries the Go runtime version.
-//
-// Keeping the setup in one place mirrors the OpenFeatureConfig pattern used in
-// the Spring Boot variant, so the two demos read the same way side by side.
+// Package flagd sets up the flagd FILE-mode provider pointing at the local
+// flags.json file. Later steps evolve this into adding hooks and a global
+// evaluation context.
 package flagd
 
 import (
 	"fmt"
-	"runtime"
-	"strings"
 
 	flagdprovider "github.com/open-feature/go-sdk-contrib/providers/flagd/pkg"
 	"github.com/open-feature/go-sdk/openfeature"
-
-	"github.com/openfeature/fun-with-flags-demo/go-chi/internal/hook"
 )
 
-// Init configures OpenFeature with a flagd FILE-mode provider pointing at
-// ./flags.json, attaches the custom logging hook, and sets a global evaluation
-// context with the Go runtime version.
-//
-// runtime.Version() returns values like "go1.22.3"; the sem_ver targeting in
-// flags.json expects a plain semver, so we strip the "go" prefix before
-// putting it into context.
+// Init configures OpenFeature with a flagd FILE-mode provider pointing at the
+// given flags.json path.
 func Init(flagsPath string) error {
 	provider, err := flagdprovider.NewProvider(
 		flagdprovider.WithFileResolver(),
@@ -35,12 +24,6 @@ func Init(flagsPath string) error {
 	if err := openfeature.SetProviderAndWait(provider); err != nil {
 		return fmt.Errorf("set flagd provider: %w", err)
 	}
-
-	openfeature.AddHooks(hook.Custom{})
-
-	openfeature.SetEvaluationContext(openfeature.NewEvaluationContext("", map[string]any{
-		"goVersion": strings.TrimPrefix(runtime.Version(), "go"),
-	}))
 
 	return nil
 }
