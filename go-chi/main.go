@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -11,12 +12,27 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/open-feature/go-sdk/openfeature"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	flagdsetup "github.com/openfeature/fun-with-flags-demo/go-chi/internal/flagd"
 	"github.com/openfeature/fun-with-flags-demo/go-chi/internal/middleware"
+	otelsetup "github.com/openfeature/fun-with-flags-demo/go-chi/internal/otel"
 )
 
 func main() {
+	ctx := context.Background()
+
+	shutdown, err := otelsetup.Init(ctx)
+	if err != nil {
+		slog.Error("OpenTelemetry init failed", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := shutdown(context.Background()); err != nil {
+			slog.Error("OpenTelemetry shutdown failed", "err", err)
+		}
+	}()
+
 	if err := flagdsetup.Init("./flags.json"); err != nil {
 		slog.Error("OpenFeature init failed", "err", err)
 		os.Exit(1)
@@ -37,7 +53,7 @@ func main() {
 
 	addr := ":8080"
 	slog.Info("listening", "addr", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+	if err := http.ListenAndServe(addr, otelhttp.NewHandler(r, "http.server")); err != nil {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)
 	}

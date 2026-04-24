@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 
+	otelhook "github.com/open-feature/go-sdk-contrib/hooks/open-telemetry/pkg"
 	flagdprovider "github.com/open-feature/go-sdk-contrib/providers/flagd/pkg"
 	"github.com/open-feature/go-sdk/openfeature"
 
@@ -37,6 +38,7 @@ func Init(flagsPath string) error {
 	}
 
 	openfeature.AddHooks(hook.Custom{})
+	openfeature.AddHooks(otelhook.NewTracesHook())
 
 	openfeature.SetEvaluationContext(openfeature.NewEvaluationContext("", map[string]any{
 		"goVersion": strings.TrimPrefix(runtime.Version(), "go"),

@@ -158,3 +158,61 @@ defer c.Terminate(ctx)
 ```
 
 Run `go test ./...`. The container starts, the tests pass, it shuts down. No second terminal.
+
+## Step 6 OpenTelemetry tracing
+
+Logs on their own tell you what happened for one request. Once you are looking at a live system you also want to know *where* a flag was evaluated inside a request, how long it took, and how it relates to whatever upstream or downstream call made it happen. That is what traces are for, and OpenFeature ships an OTel hook specifically so flag evaluations become first-class spans alongside your HTTP handlers.
+
+The goal of this step: every flag evaluation is a span in Jaeger with the flag key, variant and reason as attributes, nested under the incoming HTTP request span.
+
+```
+go get go.opentelemetry.io/otel
+go get go.opentelemetry.io/otel/sdk
+go get go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc
+go get go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
+go get github.com/open-feature/go-sdk-contrib/hooks/open-telemetry
+```
+
+The tracer provider is configured once at startup in [`internal/otel/otel.go`](internal/otel/otel.go) and exports OTLP/gRPC to the shared Jaeger in [`../observability`](../observability):
+
+```go
+exp, _ := otlptracegrpc.New(ctx,
+    otlptracegrpc.WithInsecure(),
+    otlptracegrpc.WithEndpoint("localhost:4317"),
+)
+tp := sdktrace.NewTracerProvider(
+    sdktrace.WithBatcher(exp),
+    sdktrace.WithResource(resource.NewWithAttributes(
+        semconv.SchemaURL,
+        semconv.ServiceName("fun-with-flags-go-chi"),
+    )),
+)
+otel.SetTracerProvider(tp)
+```
+
+In `main.go` the chi router is wrapped with `otelhttp.NewHandler` so every incoming request gets a server span, which becomes the parent of any flag evaluation spans:
+
+```go
+if err := http.ListenAndServe(addr, otelhttp.NewHandler(r, "http.server")); err != nil {
+    slog.Error("server stopped", "err", err)
+}
+```
+
+Finally, register the OpenFeature OTel hook next to the existing custom hook in `internal/flagd/provider.go`:
+
+```go
+openfeature.AddHooks(hook.Custom{})
+openfeature.AddHooks(otelhook.NewTracesHook())
+```
+
+`NewTracesHook()` returns an implementation that adds a `feature_flag.evaluation` event with `feature_flag.key`, `feature_flag.variant` and the evaluation reason as attributes on whatever span is currently on the context. Because `otelhttp` has already started one, the event lands on the HTTP server span for the request.
+
+To see it end-to-end:
+
+```
+cd ../observability && docker compose up -d
+cd ../go-chi && go run .
+curl http://localhost:8080/
+```
+
+Open <http://localhost:16686>, pick the `fun-with-flags-go-chi` service, and drill into a trace — the `feature_flag.evaluation` event on the request span carries the flag key, the selected variant and the reason for the match.
