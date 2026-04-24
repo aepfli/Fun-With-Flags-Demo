@@ -12,6 +12,11 @@ dependencies = [
     "uvicorn[standard]>=0.27",
     "openfeature-sdk>=0.7",
     "openfeature-provider-flagd>=0.2",
+    "opentelemetry-api>=1.24",
+    "opentelemetry-sdk>=1.24",
+    "opentelemetry-exporter-otlp>=1.24",
+    "opentelemetry-instrumentation-fastapi>=0.45b0",
+    "openfeature-hooks-opentelemetry>=0.3",
 ]
 
 [project.optional-dependencies]

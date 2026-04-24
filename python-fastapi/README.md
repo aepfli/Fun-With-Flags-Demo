@@ -161,3 +161,57 @@ def flagd():
 ```
 
 Run `.venv/bin/pytest`. The container starts, tests pass, it shuts down.
+
+## Step 6 OpenTelemetry tracing
+
+A flag evaluation without tracing is a black box — you know what variant came out, but not which rule matched, not which endpoint asked, and not how long the resolution took. Wiring in OpenTelemetry turns every evaluation into a span and, once FastAPI itself is instrumented, that span lands under the HTTP request span that triggered it. Now the value, the variant, the reason, and the parent route all show up in the same Jaeger trace.
+
+```toml
+dependencies = [
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp",
+    "opentelemetry-instrumentation-fastapi",
+    "openfeature-hooks-opentelemetry",
+]
+```
+
+OTel setup lives in [`app/otel_setup.py`](app/otel_setup.py) — a tracer provider tagged with the service name, and an OTLP/gRPC exporter pointed at the shared Jaeger from [`../observability`](../observability):
+
+```python
+resource = Resource.create({"service.name": "fun-with-flags-python-fastapi"})
+provider = TracerProvider(resource=resource)
+provider.add_span_processor(BatchSpanProcessor(
+    OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
+))
+trace.set_tracer_provider(provider)
+```
+
+Wired into [`app/main.py`](app/main.py): call it from `lifespan`, instrument the FastAPI app, register the OpenFeature OTel hook:
+
+```python
+from openfeature.contrib.hook.opentelemetry import TracingHook
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    configure_otel()
+    configure_openfeature()
+    api.add_hooks([TracingHook()])
+    yield
+    shutdown_openfeature()
+
+app = FastAPI(lifespan=lifespan)
+FastAPIInstrumentor.instrument_app(app)
+```
+
+Run it end to end:
+
+```bash
+cd ../observability && docker compose up -d     # shared Jaeger + OTLP collector
+cd -
+.venv/bin/uvicorn app.main:app
+curl http://localhost:8080/
+```
+
+Open <http://localhost:16686>, pick the `fun-with-flags-python-fastapi` service, click a trace — the flag evaluation span sits under the request span, with the flag key, variant, and reason attached.
