@@ -38,6 +38,5 @@ public class OpenFeatureStartup {
         api.setEvaluationContext(evaluationContext);
 
         api.setTransactionContextPropagator(new ThreadLocalTransactionContextPropagator());
-        api.addHooks(new CustomHook());
     }
 }
