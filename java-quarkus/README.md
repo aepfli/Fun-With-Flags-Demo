@@ -236,3 +236,62 @@ Hit `curl http://localhost:8080/` a few times, then open Grafana at <http://loca
 - **Metrics** — open the **Fun With Flags — Feature Flag Metrics** dashboard for evaluation counts broken down by flag key, variant, and reason.
 
 Metrics export on a 10s interval, so expect a 10–15s delay between the first request and the first datapoint showing up on the dashboard.
+
+## Step 7 Progressive rollout
+
+Now I get to the part of the talk that justifies the whole exercise: deploy is not the same as release. The new code can ship to production weeks before any user actually runs it, and when it misbehaves I roll it back in flagd without redeploying anything.
+
+The setup is a contrived "new greeting algorithm" — slower (200ms artificial latency) and flaky (10% chance to return a 500). I want it behind a fractional flag so I can ramp traffic 0 → 10 → 50 → 100 while watching the latency and error panels in Grafana.
+
+`IndexResource` reads the boolean and branches:
+
+```java
+@GET
+@Produces(MediaType.APPLICATION_JSON)
+public Response index() {
+    Client client = OpenFeatureAPI.getInstance().getClient();
+    boolean newAlgo = client.getBooleanValue("new_greeting_algo", false);
+    if (newAlgo) {
+        try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        if (ThreadLocalRandom.current().nextDouble() < 0.1) {
+            return Response.status(500).entity("simulated failure in new_greeting_algo").build();
+        }
+    }
+    return Response.ok(client.getStringDetails("greetings", "No World")).build();
+}
+```
+
+The fractional operator in flagd needs a stable bucketing key per user, otherwise the same caller bounces between variants on every request and the rollout looks like noise. I extend the request filter to pull `userId` from the query string and set it as the targeting key on the transaction context:
+
+```java
+String language = ctx.getUriInfo().getQueryParameters().getFirst("language");
+String userId = ctx.getUriInfo().getQueryParameters().getFirst("userId");
+Map<String, Value> attrs = language != null ? Map.of("language", new Value(language)) : Map.of();
+ImmutableContext c = userId != null ? new ImmutableContext(userId, attrs) : new ImmutableContext(attrs);
+OpenFeatureAPI.getInstance().setTransactionContext(c);
+```
+
+The flag in `flags.json` starts at 0% on:
+
+```json
+"new_greeting_algo": {
+  "state": "ENABLED",
+  "variants": { "off": false, "on": true },
+  "defaultVariant": "off",
+  "targeting": {
+    "fractional": [
+      ["off", 100],
+      ["on", 0]
+    ]
+  }
+}
+```
+
+The rollout itself is just edits to that one file with the app still running:
+
+1. Start at `[["off", 100], ["on", 0]]`. New code is shipped, zero traffic on it. Latency and 5xx panels in Grafana stay flat.
+2. Bump to `[["off", 90], ["on", 10]]`. About one in ten requests now takes the slow path. The p95 panel ticks up, and you should see a small uptick on the 5xx rate panel — that is the 10% failure of the 10% rollout, so roughly 1% overall.
+3. Bump to `[["off", 50], ["on", 50]]` if the dashboards still look survivable. Errors and latency double.
+4. Roll back to `[["off", 100], ["on", 0]]` the moment a panel goes red. No redeploy, no restart, no Slack thread waiting on a release engineer — just save the file and the next evaluation picks it up.
+
+I drive the demo with `requests.http`, hitting `/?userId=user-1`, `user-2`, … so the fractional buckets are stable and the dashboards tell a believable story. The whole point is that the operational lever lives outside the deploy pipeline.
