@@ -39,6 +39,6 @@ The canonical, always-current deck lives at **<https://schrottner.at/openFeature
 
 ## Step 6 — observability
 
-Step 6 adds OpenTelemetry tracing so flag evaluations show up as spans alongside the rest of the app's request telemetry. A single [`observability/`](observability/README.md) folder at the repo root holds the shared Jaeger container — one backend for all five variants. Each language's step 6 lives on `step/<folder>/6` and adds its OTel hook + exporter config.
+Step 6 adds OpenTelemetry traces *and* metrics so every flag evaluation shows up alongside the rest of the app's telemetry. A single [`observability/`](observability/README.md) folder at the repo root holds a Grafana LGTM container — Grafana, Prometheus, Tempo, Loki, OTLP receivers, all in one image. One backend for every variant, one URL (<http://localhost:3000>) to open. Each language's step 6 lives on `step/<folder>/6` and adds the OTel hooks + exporter config.
 
 The legacy `demo/with-tracking` branch is kept around for anyone who bookmarked it, but the step-6 branches supersede it.

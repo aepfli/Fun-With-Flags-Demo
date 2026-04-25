@@ -403,6 +403,6 @@ There are two different behaviours we can observe depending on the mode
 
 ## Step 6 OpenTelemetry observability
 
-Every flag evaluation becomes a span in Jaeger, nested under the HTTP request span that triggered it. The code lives on [`step/java-spring/6`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/java-spring/6); the shared Jaeger container lives in [`../observability/`](../observability/README.md).
+Every flag evaluation becomes a span in Tempo, nested under the HTTP request span that triggered it. The code lives on [`step/java-spring/6`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/java-spring/6); the shared Grafana LGTM container lives in [`../observability/`](../observability/README.md).
 
-Run `cd ../observability && docker compose up -d`, check out `step/java-spring/6`, start the app. Jaeger UI at <http://localhost:16686>, pick the `fun-with-flags-java-spring` service — one span per evaluation with the flag key, variant, and reason attached as attributes.
+Run `cd ../observability && docker compose up -d`, check out `step/java-spring/6`, start the app. Grafana UI at <http://localhost:3000>, open the **Fun With Flags — Feature Flag Metrics** dashboard or use Explore → Tempo to pick the `fun-with-flags-java-spring` service — one span per evaluation with the flag key, variant, and reason attached as attributes.

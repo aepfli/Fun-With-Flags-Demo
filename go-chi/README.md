@@ -161,6 +161,6 @@ Run `go test ./...`. The container starts, the tests pass, it shuts down. No sec
 
 ## Step 6 OpenTelemetry observability
 
-Every flag evaluation becomes a span in Jaeger, nested under the HTTP request span that triggered it. The code lives on [`step/go-chi/6`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/go-chi/6); the shared Jaeger container lives in [`../observability/`](../observability/README.md).
+Every flag evaluation becomes a span in Tempo, nested under the HTTP request span that triggered it. The code lives on [`step/go-chi/6`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/go-chi/6); the shared Grafana LGTM container lives in [`../observability/`](../observability/README.md).
 
-Run `cd ../observability && docker compose up -d`, check out `step/go-chi/6`, and start the app with `go run .`. Jaeger UI at <http://localhost:16686>, pick the `fun-with-flags-go-chi` service.
+Run `cd ../observability && docker compose up -d`, check out `step/go-chi/6`, and start the app with `go run .`. Grafana UI at <http://localhost:3000>, open the **Fun With Flags — Feature Flag Metrics** dashboard or use Explore → Tempo to pick the `fun-with-flags-go-chi` service.

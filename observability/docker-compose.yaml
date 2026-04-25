@@ -1,10 +1,15 @@
 services:
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: fun-with-flags-jaeger
+  lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: fun-with-flags-lgtm
     ports:
-      - "16686:16686"   # Jaeger UI
-      - "4317:4317"     # OTLP gRPC receiver (used by each language's OTel exporter)
-      - "4318:4318"     # OTLP HTTP receiver
+      - "3000:3000"     # Grafana UI (admin/admin)
+      - "4317:4317"     # OTLP gRPC (every language's exporter points here)
+      - "4318:4318"     # OTLP HTTP
     environment:
-      - COLLECTOR_OTLP_ENABLED=true
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    # Import the prebuilt dashboard via volume. The base image provisions
+    # anything under /otel-lgtm/grafana/dashboards/.
+    volumes:
+      - ./dashboards:/otel-lgtm/grafana/dashboards:ro

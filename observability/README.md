@@ -1,8 +1,8 @@
 # Observability Stack
 
-Shared observability backend for step 6 across every language variant. One Jaeger container, OTLP receivers on the standard ports, UI at <http://localhost:16686>.
+One container, both halves of the picture: traces and metrics for every flag evaluation, side by side in Grafana.
 
-I kept it to a single container on purpose. Jaeger 1.35+ ships the OTLP receiver built in, so a separate OTel Collector is not needed to get traces flowing. When a workshop is ready to talk about Collector pipelines (sampling, routing, enrichment), that is the natural follow-up — but it is not what step 6 is trying to teach.
+I picked [`grafana/otel-lgtm`](https://github.com/grafana/docker-otel-lgtm) on purpose. It bundles Grafana, Prometheus/Mimir (metrics), Tempo (traces), and Loki (logs) into a single image with OTLP receivers built in. One process to remember, one URL to open, one less thing standing between an attendee and a working demo. A "real" deployment would split these out — but a demo that takes ten minutes to set up isn't a demo any more.
 
 ## Run it
 
@@ -11,11 +11,20 @@ cd observability
 docker compose up -d
 ```
 
-- Jaeger UI: <http://localhost:16686>
+- Grafana UI: <http://localhost:3000> — log in with `admin` / `admin`, skip the password change prompt
 - OTLP gRPC: `localhost:4317`
 - OTLP HTTP: `localhost:4318`
 
-Every language's step 6 branch points its OTel exporter at `localhost:4317` (or `4318`) and writes a service name like `fun-with-flags-<language>`. Open the UI, pick the service, and you'll see one span per flag evaluation — with the flag key, variant, and reason attached as attributes courtesy of the OpenFeature OTel hook.
+## What you'll see
+
+The container ships data sources for Prometheus, Tempo, and Loki already wired up. Open Grafana → **Dashboards** to find the **Fun With Flags — Feature Flag Metrics** dashboard (loaded from [`dashboards/feature-flags.json`](dashboards/feature-flags.json)). Four panels:
+
+- Flag evaluations per second, broken out by flag key
+- Variant distribution over the last 5 minutes (pie)
+- Evaluation error rate
+- Per-service evaluation rate — useful when more than one variant is running
+
+For traces, open **Explore** → pick the **Tempo** datasource → search by service name (`fun-with-flags-java-spring`, `fun-with-flags-go-chi`, …). Each flag evaluation appears as a span event nested inside the request that triggered it.
 
 ## Stop it
 
@@ -25,4 +34,4 @@ docker compose down
 
 ## Why this folder is separate
 
-One observability stack serves every language variant. Keeping it here (and not in each `java-spring/`, `python-fastapi/`, …) means the attendee runs one compose file, not five, regardless of how many languages they try. The devcontainer forwards ports `16686`, `4317`, `4318` so this works in Codespaces too.
+One observability stack serves every language variant. Keeping it here (and not in each `java-spring/`, `python-fastapi/`, …) means an attendee runs one compose file no matter how many languages they try. The devcontainer forwards ports `3000`, `4317`, `4318` so this works in Codespaces too.
