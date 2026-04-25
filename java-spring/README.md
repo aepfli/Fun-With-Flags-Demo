@@ -403,9 +403,9 @@ There are two different behaviours we can observe depending on the mode
 
 ## Step 6 OpenTelemetry
 
-Observability is one of the superpowers OpenFeature unlocks: every flag evaluation can be emitted as a distributed-tracing span, neatly nested inside the HTTP request that triggered it. With a single hook the workshop audience sees the exact flag key, variant, and reason inside Jaeger — no bespoke logging, no custom correlation id dance.
+Observability is one of the superpowers OpenFeature unlocks: every flag evaluation can be emitted as a distributed-tracing span AND as a metric, neatly correlated with the HTTP request that triggered it. With two small hooks the workshop audience sees the exact flag key, variant, and reason inside Grafana — no bespoke logging, no custom correlation id dance.
 
-For this step we use the upstream `otel` contrib hook together with the OpenTelemetry SDK autoconfigure module, which builds an `OpenTelemetry` instance exporting via OTLP/gRPC. The shared Jaeger container from [`../observability`](../observability) accepts traces on port `4317`.
+For this step we use the upstream `otel` contrib hooks (`TracesHook` + `MetricsHook`) together with the OpenTelemetry SDK autoconfigure module, which builds an `OpenTelemetry` instance exporting both signals via OTLP/gRPC. The shared LGTM (Loki/Grafana/Tempo/Mimir) stack from [`../observability`](../observability) accepts OTLP on port `4317` and exposes Grafana on port `3000`.
 
 ### Step 6.1 Add dependencies
 
@@ -460,7 +460,7 @@ Import the OpenTelemetry BOMs and add the contrib hook plus the SDK/exporter. Pi
 
 ### Step 6.2 Configure the OpenTelemetry SDK
 
-Create an `OpenTelemetryConfig` that builds the global SDK using the autoconfigure module. Properties from `application.properties` flow through as system properties so the SDK picks them up.
+Create an `OpenTelemetryConfig` that builds the global SDK using the autoconfigure module. Properties from `application.properties` flow through as system properties so the SDK picks them up. With `otel.traces.exporter=otlp` AND `otel.metrics.exporter=otlp` the autoconfigure module wires up both a `SdkTracerProvider` and a `SdkMeterProvider` (the latter using an `OtlpGrpcMetricExporter`), so the resulting `OpenTelemetry` bean exposes both `getTracerProvider()` and `getMeterProvider()`.
 
 ```java
 @Configuration
@@ -472,9 +472,11 @@ public class OpenTelemetryConfig {
             @Value("${otel.exporter.otlp.endpoint:http://localhost:4317}") String otlpEndpoint) {
         System.setProperty("otel.service.name", serviceName);
         System.setProperty("otel.exporter.otlp.endpoint", otlpEndpoint);
+        System.setProperty("otel.exporter.otlp.protocol", "grpc");
         System.setProperty("otel.traces.exporter", "otlp");
-        System.setProperty("otel.metrics.exporter", "none");
+        System.setProperty("otel.metrics.exporter", "otlp");
         System.setProperty("otel.logs.exporter", "none");
+        System.setProperty("otel.metric.export.interval", "10000");
 
         return AutoConfiguredOpenTelemetrySdk.builder()
                 .setResultAsGlobal()
@@ -484,32 +486,44 @@ public class OpenTelemetryConfig {
 }
 ```
 
-Point the app at Jaeger in `application.properties`:
+Point the app at the LGTM stack in `application.properties`:
 
 ```properties
-otel.service.name=fun-with-flags-java-spring
 otel.exporter.otlp.endpoint=http://localhost:4317
+otel.exporter.otlp.protocol=grpc
+otel.metrics.exporter=otlp
 otel.traces.exporter=otlp
-otel.metrics.exporter=none
 otel.logs.exporter=none
+otel.service.name=fun-with-flags-java-spring
+otel.metric.export.interval=10000
 ```
 
-### Step 6.3 Register the OpenFeature OTel hook
+### Step 6.3 Register the OpenFeature OTel hooks
 
-The contrib hook creates a span for every flag evaluation, tagged with the flag key, variant, and reason — automatically nested inside whichever span is current (the Spring HTTP request, in our case).
+The `TracesHook` creates a span for every flag evaluation, tagged with the flag key, variant, and reason — automatically nested inside whichever span is current (the Spring HTTP request, in our case). The `MetricsHook` increments a counter per evaluation, broken down by flag key / variant / reason, so we get an aggregate view in Grafana on top of the individual traces.
+
+`MetricsHook` needs the `OpenTelemetry` instance to grab the meter provider, so we inject the bean into `OpenFeatureConfig` via constructor injection:
 
 ```java
+import dev.openfeature.contrib.hooks.otel.MetricsHook;
 import dev.openfeature.contrib.hooks.otel.TracesHook;
+
+private final io.opentelemetry.api.OpenTelemetry openTelemetry;
+
+public OpenFeatureConfig(io.opentelemetry.api.OpenTelemetry openTelemetry) {
+    this.openTelemetry = openTelemetry;
+}
 
 @PostConstruct
 public void initProvider() {
     // ... existing provider setup ...
     api.addHooks(new CustomHook());
     api.addHooks(new TracesHook());
+    api.addHooks(new MetricsHook(openTelemetry));
 }
 ```
 
-> Note: In the 3.2.1 release the class is called `TracesHook` (the companion `MetricsHook` covers metrics). Older docs reference `OpenTelemetryHook` — same idea, newer name.
+> Note: In the 3.2.1 release the classes are called `TracesHook` and `MetricsHook`. Older docs reference `OpenTelemetryHook` — same idea, split into two focused hooks.
 
 ### Step 6.4 Run it
 
@@ -527,4 +541,8 @@ public void initProvider() {
    curl http://localhost:8080/
    curl 'http://localhost:8080/?language=de'
    ```
-4. Open Jaeger at <http://localhost:16686>, select the `fun-with-flags-java-spring` service, and inspect a trace. You should see the HTTP request span with the flag evaluation span nested inside, carrying `feature_flag.key`, variant, and reason attributes.
+4. Open Grafana at <http://localhost:3000> (login `admin` / `admin`).
+   - **Traces**: open **Explore → Tempo**, pick the `fun-with-flags-java-spring` service, and inspect a trace. You should see the HTTP request span with the flag evaluation span nested inside, carrying `feature_flag.key`, variant, and reason attributes.
+   - **Metrics**: open the **Fun With Flags — Feature Flag Metrics** dashboard to see flag-evaluation counters per key / variant / reason.
+
+> Heads up: the metric export interval is 10 seconds (`otel.metric.export.interval=10000`), so it takes 10–15 seconds after the first evaluation before the dashboard lights up. Traces show up immediately.

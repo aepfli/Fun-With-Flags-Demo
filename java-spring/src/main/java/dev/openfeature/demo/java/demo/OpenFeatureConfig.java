@@ -1,5 +1,6 @@
 package dev.openfeature.demo.java.demo;
 
+import dev.openfeature.contrib.hooks.otel.MetricsHook;
 import dev.openfeature.contrib.hooks.otel.TracesHook;
 import dev.openfeature.contrib.providers.flagd.Config;
 import dev.openfeature.contrib.providers.flagd.FlagdOptions;
@@ -43,6 +44,7 @@ public class OpenFeatureConfig implements WebMvcConfigurer {
 
         api.addHooks(new CustomHook());
         api.addHooks(new TracesHook());
+        api.addHooks(new MetricsHook(openTelemetry));
     }
 
     @Override
