@@ -43,8 +43,13 @@ Step 6 adds OpenTelemetry traces *and* metrics so every flag evaluation shows up
 
 The legacy `demo/with-tracking` branch is kept around for anyone who bookmarked it, but the step-6 branches supersede it.
 
-## Step 7 — load generation, gated by a flag
+## Step 7 — progressive rollout with consequences
 
-[`loadgen/`](loadgen/README.md) ships a small k6 container that drives traffic against whichever language variant you're running, **only when the OpenFeature flag `loadgen_active` is on**. Flip `defaultVariant` from `"off"` to `"on"` in `flags.json`, watch the Grafana dashboard fill up, flip back to stop. The feature-flag demo is itself feature-flagged — the recursion is the point.
+A new greeting algorithm is rolling out. It is slower (200ms) and 10% of the time it errors. Step 7's job is to roll it out gradually, watch what happens in Grafana, and roll back without redeploying.
 
-Nothing language-specific lives in step 7, so it doesn't fan out to per-language step branches: it's one shared folder that points at port 8080 of any of the variants.
+Two moving parts:
+
+- **[`loadgen/`](loadgen/README.md)** — k6 container that drives traffic, **gated by an OpenFeature flag** (`loadgen_active`). Flip the flag, the load runs; flip it back, it idles. The feature-flag demo is itself feature-flagged.
+- **`step/<folder>/7`** branches — per-language code change adding `new_greeting_algo` (slow + error path) and reading `?userId=…` as the OpenFeature `targetingKey` so the fractional rollout buckets are stable per user.
+
+Each language's README walks the operational story: ramp the percentage in `flags.json`, watch the HTTP latency and 5xx panels respond, roll back the second something looks bad.

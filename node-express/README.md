@@ -160,6 +160,15 @@ Every flag evaluation becomes a span in Tempo, nested under the HTTP request spa
 
 Run `cd ../observability && docker compose up -d`, check out `step/node-express/6`, and start the app with `node src/index.js`. Grafana UI at <http://localhost:3000>, open the **Fun With Flags — Feature Flag Metrics** dashboard or use Explore → Tempo to pick the `fun-with-flags-node-express` service.
 
-## Step 7 Load generation
+## Step 7 Progressive rollout
 
-Once you've got step 6 wired up, the dashboard is empty until something drives traffic. The shared [`../loadgen/`](../loadgen/README.md) folder runs a small k6 container that hits `GET /` with a mix of `language` values — **but only while the OpenFeature flag `loadgen_active` is set to `on`**. The flag is already in this folder's `flags.json` (`defaultVariant: "off"`); flip it to `"on"`, the dashboard fills, flip back to idle the load. The feature-flag demo, feature-flagged.
+A new greeting algorithm is rolling out. It is slower (200ms) than the old code path and it errors 10% of the time. The job of step 7 is to roll it out gradually, watch the consequences in Grafana, and roll it back without redeploying.
+
+The code lives on [`step/node-express/7`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/node-express/7) — the handler reads a new `new_greeting_algo` flag, and the middleware passes `?userId=...` through as the OpenFeature `targetingKey` so the fractional rollout buckets stick per user.
+
+Two moving parts work together:
+
+- **[`../loadgen/`](../loadgen/README.md)** drives traffic. It is gated by an `loadgen_active` flag (already in this folder's `flags.json`, default `"off"`) — flip it to `"on"` to start the load, back to `"off"` to stop. The feature-flag demo, feature-flagged.
+- **`flags.json`** on `step/node-express/7` defines `new_greeting_algo` with a flagd `fractional` rule, defaulting to 100% off. Bump the percentage and flagd hot-reloads — no app restart.
+
+Run the demo: start observability + the app + loadgen, flip `loadgen_active` to `"on"`, then ramp `new_greeting_algo` from `[["off",100],["on",0]]` to 10/90, then 50/50. Watch the **HTTP request latency (p50, p99)** and **HTTP 5xx per second** panels in Grafana climb. Roll back to 100/0 the moment something looks bad.
