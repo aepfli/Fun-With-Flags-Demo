@@ -1,8 +1,9 @@
 # Fun With Flags — An OpenFeature Demo
 
 [![CI](https://github.com/aepfli/Fun-With-Flags-Demo/actions/workflows/ci.yml/badge.svg)](https://github.com/aepfli/Fun-With-Flags-Demo/actions/workflows/ci.yml)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/aepfli/Fun-With-Flags-Demo)
-[![Open in Dev Container](https://img.shields.io/static/v1?label=Dev%20Container&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/aepfli/Fun-With-Flags-Demo)
+[![Beginner](https://img.shields.io/static/v1?label=Codespace&message=Beginner&color=22c55e&logo=github)](https://codespaces.new/aepfli/Fun-With-Flags-Demo?devcontainer_path=.devcontainer%2Fbeginner%2Fdevcontainer.json)
+[![Intermediate](https://img.shields.io/static/v1?label=Codespace&message=Intermediate&color=eab308&logo=github)](https://codespaces.new/aepfli/Fun-With-Flags-Demo?devcontainer_path=.devcontainer%2Fintermediate%2Fdevcontainer.json)
+[![Expert](https://img.shields.io/static/v1?label=Codespace&message=Expert&color=ef4444&logo=github)](https://codespaces.new/aepfli/Fun-With-Flags-Demo?devcontainer_path=.devcontainer%2Fexpert%2Fdevcontainer.json)
 
 I built this demo because OpenFeature talks tend to pick one language and leave the rest of the room guessing whether the same ideas apply to them. They do, and this repo proves it. I walk the exact same journey — add the SDK, swap providers, add context, add hooks, go remote — across Java Spring Boot, Java Quarkus, Go, Python (FastAPI), and Node.js (Express). Each folder is self-contained, so if you came for Go you never need to read the Python code, and the steps line up 1:1 so you can peek at another language when you want to compare.
 
@@ -20,18 +21,19 @@ I am a CNCF Ambassador, an OpenFeature maintainer, and I sit in the top three co
 
 The folder name always reads `<language>-<framework>`, so adding a new variant later (`java-micronaut`, `python-flask`, `go-gin`, …) drops in alongside the existing ones without breaking the pattern.
 
-## The same learning arc
+## Pick your phase
 
-Every folder walks the same steps, 1.1 through 5.2: add the OpenFeature SDK, plug in the in-memory provider, switch to the flagd file provider, pass evaluation context dynamically, lift it into an interceptor or middleware, set it globally, attach hooks for observability, and finally talk to a real remote flagd — first via `docker compose`, then via Testcontainers so the test suite owns its own flagd. The language-specific detail (annotations, decorators, DI quirks) lives in each folder's README — I don't repeat it here.
+The demo is a three-act adventure. Each phase is a separate Codespaces config so you only get the tools you need — fast boot for the early phases, the full operational stack when you're ready for it.
 
-## Running without installing anything
+| Phase | Steps | What it teaches | Codespace |
+| --- | --- | --- | --- |
+| **Beginner** | 1.1, 1.2 | OpenFeature SDK basics, in-memory provider | language toolchains, no Docker |
+| **Intermediate** | 2.1 → 5.2 | flagd, targeting, interceptors, hooks, remote flagd, Testcontainers | + Docker-in-Docker, flagd ports forwarded |
+| **Expert** | 6, 7 | OpenTelemetry traces & metrics, progressive rollout with consequences | + LGTM stack and loadgen ports |
 
-I don't want you fighting a JDK install during a 40-minute talk, so the repo ships a devcontainer. Two ways in:
+Click a Codespaces badge above to launch the matching environment. Locally: clone the repo, then in VS Code run **Dev Containers: Reopen in Container** and pick the phase from the prompt.
 
-- On GitHub, click **Code → Create codespace on main**. That is the zero-setup path.
-- Or clone locally and in VS Code run **Dev Containers: Reopen in Container**.
-
-Port `8080` is the app under test. Ports `8013`–`8016` are flagd (gRPC, HTTP, and the two sync variants). All of them are forwarded for you.
+Port `8080` is the app. `8013`–`8016` are flagd (gRPC, HTTP, sync). `3000` is Grafana. `4317` / `4318` are the OTLP receivers. Each phase forwards only the ports it needs.
 
 ## Slides
 

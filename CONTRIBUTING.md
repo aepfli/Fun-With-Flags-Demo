@@ -16,6 +16,10 @@ Every language folder assumes you `cd` into it and everything runs from there: b
 
 Folder names read `<language>-<framework>` (`java-spring`, `java-quarkus`, `go-chi`, `python-fastapi`, `node-express`) so a second framework per language — `java-micronaut`, `python-flask`, `go-gin`, `node-fastify` — can slot in without renaming anything.
 
+## Devcontainer phases
+
+There are three Codespaces configs under `.devcontainer/`: `beginner/`, `intermediate/`, `expert/`. Each one only ships what its phase needs — Beginner skips Docker-in-Docker entirely so the boot is quick, Intermediate adds DinD + flagd ports, Expert adds the LGTM and loadgen ports on top. Changes to *any* of them are cross-cutting and should land in their own PR (don't bundle a devcontainer tweak with a language change).
+
 ## Tone for READMEs
 
 The voice across this repo is deliberately mine — first-person singular, lead with *why*, name specifics (SDK versions, ports, framework names), and stay honest about trade-offs. Concretely:
