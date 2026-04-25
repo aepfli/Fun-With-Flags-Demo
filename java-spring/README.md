@@ -546,3 +546,86 @@ public void initProvider() {
    - **Metrics**: open the **Fun With Flags — Feature Flag Metrics** dashboard to see flag-evaluation counters per key / variant / reason.
 
 > Heads up: the metric export interval is 10 seconds (`otel.metric.export.interval=10000`), so it takes 10–15 seconds after the first evaluation before the dashboard lights up. Traces show up immediately.
+
+## Step 7 Progressive Rollout
+
+Here is the part where feature flags pay for themselves. So far we have wired everything up, watched our flag evaluations show up in Grafana, and changed strings in a config file. Cute, but not the real value. The real value is that **deploying** code and **releasing** code become two separate things. We can ship risky code dark, turn it on for 1% of users, watch the dashboards, and turn it off again — without rebuilding, redeploying, or paging anyone.
+
+To make that tangible we are going to ship a deliberately bad new "greeting algorithm": it sleeps 200ms (so latency goes up) and 10% of the time it returns HTTP 500 (so error rate goes up). In real life this would be the new pricing engine, the rewritten recommendation service, the migration off your legacy database — anything where you want to be able to bail out fast.
+
+### Step 7.1 The flag
+
+We add a boolean flag `new_greeting_algo` with **fractional** targeting. Default is 100% off:
+
+```json
+"new_greeting_algo": {
+  "state": "ENABLED",
+  "variants": { "off": false, "on": true },
+  "defaultVariant": "off",
+  "targeting": {
+    "fractional": [
+      ["off", 100],
+      ["on", 0]
+    ]
+  }
+}
+```
+
+`fractional` buckets users by `targetingKey` by default — same key, same bucket, every time. That is what makes a rollout *sticky*: if I give you the new code path on the first request, you get it on the next request too. Bumping the percentages from `[100, 0]` to `[90, 10]` to `[50, 50]` is how we ramp up. **No code change, no redeploy.**
+
+### Step 7.2 Reading the flag
+
+In `IndexController` we read the flag and inject the bad behaviour when it is on:
+
+```java
+@GetMapping("/")
+public ResponseEntity<?> helloWorld() {
+    Client client = OpenFeatureAPI.getInstance().getClient();
+    boolean newAlgo = client.getBooleanValue("new_greeting_algo", false);
+    if (newAlgo) {
+        try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        if (ThreadLocalRandom.current().nextDouble() < 0.1) {
+            return ResponseEntity.status(500).body("simulated failure in new_greeting_algo");
+        }
+    }
+    return ResponseEntity.ok(client.getStringDetails("greetings", "No World"));
+}
+```
+
+### Step 7.3 Stable bucketing via targetingKey
+
+For the fractional split to be sticky we need a stable identifier per caller. We extend the interceptor to read a `userId` query param and pass it as the OpenFeature **targetingKey**:
+
+```java
+String language = request.getParameter("language");
+String userId = request.getParameter("userId");
+HashMap<String, Value> attributes = new HashMap<>();
+if (language != null) attributes.put("language", new Value(language));
+ImmutableContext ctx = userId != null
+    ? new ImmutableContext(userId, attributes)
+    : new ImmutableContext(attributes);
+OpenFeatureAPI.getInstance().setTransactionContext(ctx);
+```
+
+`new ImmutableContext(targetingKey, attributes)` is the constructor in SDK 1.14.2 that lets you set the targeting key and attributes in one go.
+
+### Step 7.4 Run the rollout
+
+1. Start the observability stack and flagd if they are not already running:
+   ```bash
+   cd ../observability && docker compose up -d
+   cd -
+   docker compose up -d   # flagd
+   ```
+2. Start the app:
+   ```bash
+   ./mvnw spring-boot:run
+   ```
+3. Turn on the loadgen by flipping `loadgen_active` to true (see the `loadgen` section of the workshop). This drives steady traffic so the Grafana panels actually have something to draw.
+4. Open Grafana at <http://localhost:3000> and pin the **HTTP request latency (p50, p99)** and **HTTP 5xx per second** panels.
+5. Edit `flags.json` and ramp the rollout — flagd watches the file and picks up changes within a second:
+   - `[90, 10]` — 10% of users on the new algo. p99 latency starts to lift, you start to see the occasional 5xx.
+   - `[50, 50]` — 50/50. p50 jumps up by ~200ms, 5xx rate is now obvious.
+   - `[100, 0]` — back to safe. Latency and errors return to baseline within seconds.
+
+That last step is the one to internalise. **No deploy. No rebuild. No restart.** Just edit the flag, watch the dashboard recover. That is what "decouple deployment from release" means in practice — and it is the same lever you would pull at 3am when the new pricing engine starts erroring in production.

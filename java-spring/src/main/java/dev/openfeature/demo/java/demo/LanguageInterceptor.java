@@ -17,12 +17,15 @@ public class LanguageInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String language = request.getParameter("language");
+        String userId = request.getParameter("userId");
+        HashMap<String, Value> attributes = new HashMap<>();
         if (language != null) {
-            HashMap<String, Value> attributes = new HashMap<>();
             attributes.put("language", new Value(language));
-            ImmutableContext evaluationContext = new ImmutableContext(attributes);
-            OpenFeatureAPI.getInstance().setTransactionContext(evaluationContext);
         }
+        ImmutableContext evaluationContext = userId != null
+                ? new ImmutableContext(userId, attributes)
+                : new ImmutableContext(attributes);
+        OpenFeatureAPI.getInstance().setTransactionContext(evaluationContext);
         return HandlerInterceptor.super.preHandle(request, response, handler);
     }
 
