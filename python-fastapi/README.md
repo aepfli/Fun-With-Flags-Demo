@@ -238,3 +238,62 @@ Open Grafana at <http://localhost:3000> (login `admin` / `admin`):
 
 - **Traces** — *Explore → Tempo*, search for service `fun-with-flags-python-fastapi`. Each trace has the flag evaluation span sitting under the request span, with the flag key, variant, and reason attached.
 - **Metrics** — open the **Fun With Flags — Feature Flag Metrics** dashboard. The export interval is 10s, so the first datapoint shows up roughly 10–15s after the first request.
+
+## Step 7 Progressive rollout of a risky new code path
+
+The motivation here is a real-world one: imagine a "new greeting algorithm" that the team wants to ship. It is materially slower (200ms extra) and is known to be flaky during burn-in (10% error rate). We do *not* want to flip it on for everyone in one go, and we definitely do not want to redeploy each time we change the percentage. A boolean fractional flag covers both: the percentage lives in [`flags.json`](flags.json), and the SLO panels in Grafana tell us whether to keep ramping or roll back.
+
+The endpoint reads a second flag and short-circuits to the slow + occasionally-failing code path when it resolves to `true`:
+
+```python
+@app.get("/")
+def hello_world():
+    client = api.get_client()
+    new_algo = client.get_boolean_value("new_greeting_algo", False)
+    if new_algo:
+        time.sleep(0.2)
+        if random.random() < 0.1:
+            raise HTTPException(status_code=500, detail="simulated failure in new_greeting_algo")
+    details = client.get_string_details("greetings", "Hello World")
+    return {"flag_key": details.flag_key, "value": details.value, "variant": details.variant, "reason": str(details.reason) if details.reason else None}
+```
+
+Fractional targeting needs a stable bucket key per user, so the middleware now also lifts `userId` out of the query string and writes it onto the OpenFeature transaction context as the `targetingKey`:
+
+```python
+class LanguageMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        language = request.query_params.get("language")
+        user_id = request.query_params.get("userId")
+        attrs = {"language": language} if language else {}
+        ec = EvaluationContext(targeting_key=user_id, attributes=attrs) if user_id \
+             else EvaluationContext(attributes=attrs)
+        api.set_transaction_context(ec)
+        try:
+            return await call_next(request)
+        finally:
+            api.set_transaction_context(EvaluationContext())
+```
+
+The flag definition in [`flags.json`](flags.json) starts at 0% — same shape as the Java/Go variants:
+
+```json
+"new_greeting_algo": {
+  "state": "ENABLED",
+  "variants": { "off": false, "on": true },
+  "defaultVariant": "off",
+  "targeting": {
+    "fractional": [
+      ["off", 100],
+      ["on", 0]
+    ]
+  }
+}
+```
+
+### Ramp it up
+
+1. **0% → 10%** — edit `flags.json` and bump `["on", 0]` to `["on", 10]` (drop the `off` weight to `90`). flagd watches the file, no restart needed. Drive load with `for i in $(seq 1 200); do curl -s "http://localhost:8080/?userId=user-$i" >/dev/null; done`. About one in ten requests now sleeps 200ms, and a fraction of those return 500.
+2. **Watch Grafana** — *Fun With Flags — Feature Flag Metrics* shows the `new_greeting_algo=on` slice climbing toward 10%. The Tempo traces for the slow path carry the flag span with `reason=TARGETING_MATCH` and `variant=on`. P95 latency on the request span jumps for the matched slice; the overall P95 should rise about a tenth of that.
+3. **10% → 50%** — same edit, `["on", 50]`. Same observability checks. If the error-rate panel for the `on` variant is still sitting at the expected ~10% and nothing else is on fire, keep going.
+4. **Roll back** — set `["on", 0]` (and `off` back to `100`). The next evaluation flips everyone back to the safe path, no deploy, no restart, no code change. That is the whole point of the exercise.
