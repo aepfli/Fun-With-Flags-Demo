@@ -159,36 +159,47 @@ defer c.Terminate(ctx)
 
 Run `go test ./...`. The container starts, the tests pass, it shuts down. No second terminal.
 
-## Step 6 OpenTelemetry tracing
+## Step 6 OpenTelemetry tracing and metrics
 
-Logs on their own tell you what happened for one request. Once you are looking at a live system you also want to know *where* a flag was evaluated inside a request, how long it took, and how it relates to whatever upstream or downstream call made it happen. That is what traces are for, and OpenFeature ships an OTel hook specifically so flag evaluations become first-class spans alongside your HTTP handlers.
+Logs on their own tell you what happened for one request. Once you are looking at a live system you also want to know *where* a flag was evaluated inside a request, how long it took, and — across the whole fleet — *how often* a particular flag and variant fires. Traces answer the first question, metrics answer the second, and OpenFeature ships OTel hooks for both so flag evaluations become first-class signals alongside your HTTP handlers.
 
-The goal of this step: every flag evaluation is a span in Jaeger with the flag key, variant and reason as attributes, nested under the incoming HTTP request span.
+The goal of this step: every flag evaluation is a span in Tempo with the flag key, variant and reason as attributes, AND emits a counter in Mimir/Prometheus tagged with the same dimensions. Both signals export over OTLP/gRPC to the shared LGTM stack in [`../observability`](../observability) and are visualized in Grafana.
 
 ```
 go get go.opentelemetry.io/otel
 go get go.opentelemetry.io/otel/sdk
+go get go.opentelemetry.io/otel/sdk/metric
 go get go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc
+go get go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc
 go get go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go get github.com/open-feature/go-sdk-contrib/hooks/open-telemetry
 ```
 
-The tracer provider is configured once at startup in [`internal/otel/otel.go`](internal/otel/otel.go) and exports OTLP/gRPC to the shared Jaeger in [`../observability`](../observability):
+The tracer and meter providers are configured once at startup in [`internal/otel/otel.go`](internal/otel/otel.go) and both export OTLP/gRPC to the shared LGTM stack on `localhost:4317`:
 
 ```go
-exp, _ := otlptracegrpc.New(ctx,
+traceExp, _ := otlptracegrpc.New(ctx,
     otlptracegrpc.WithInsecure(),
     otlptracegrpc.WithEndpoint("localhost:4317"),
 )
 tp := sdktrace.NewTracerProvider(
-    sdktrace.WithBatcher(exp),
-    sdktrace.WithResource(resource.NewWithAttributes(
-        semconv.SchemaURL,
-        semconv.ServiceName("fun-with-flags-go-chi"),
-    )),
+    sdktrace.WithBatcher(traceExp),
+    sdktrace.WithResource(res),
 )
 otel.SetTracerProvider(tp)
+
+metricExp, _ := otlpmetricgrpc.New(ctx,
+    otlpmetricgrpc.WithInsecure(),
+    otlpmetricgrpc.WithEndpoint("localhost:4317"),
+)
+mp := sdkmetric.NewMeterProvider(
+    sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp, sdkmetric.WithInterval(10*time.Second))),
+    sdkmetric.WithResource(res),
+)
+otel.SetMeterProvider(mp)
 ```
+
+The shared `res` resource carries `service.name=fun-with-flags-go-chi` so traces and metrics line up in Grafana. The returned shutdown func calls both `tp.Shutdown` and `mp.Shutdown` so we flush cleanly on exit.
 
 In `main.go` the chi router is wrapped with `otelhttp.NewHandler` so every incoming request gets a server span, which becomes the parent of any flag evaluation spans:
 
@@ -198,16 +209,19 @@ if err := http.ListenAndServe(addr, otelhttp.NewHandler(r, "http.server")); err 
 }
 ```
 
-Finally, register the OpenFeature OTel hook next to the existing custom hook in `internal/flagd/provider.go`:
+Finally, register both OpenFeature OTel hooks next to the existing custom hook in `internal/flagd/provider.go`:
 
 ```go
 openfeature.AddHooks(hook.Custom{})
 openfeature.AddHooks(otelhook.NewTracesHook())
+
+metricsHook, _ := otelhook.NewMetricsHook()
+openfeature.AddHooks(metricsHook)
 ```
 
-`NewTracesHook()` returns an implementation that adds a `feature_flag.evaluation` event with `feature_flag.key`, `feature_flag.variant` and the evaluation reason as attributes on whatever span is currently on the context. Because `otelhttp` has already started one, the event lands on the HTTP server span for the request.
+`NewTracesHook()` adds a `feature_flag.evaluation` event with `feature_flag.key`, `feature_flag.variant` and the evaluation reason as attributes on the current span. `NewMetricsHook()` reads the global meter provider and increments counters — most usefully `feature_flag.evaluation_requests_total` and `feature_flag.evaluation_success_total` — tagged with the flag key, variant and reason.
 
-To see it end-to-end:
+To see both signals end-to-end:
 
 ```
 cd ../observability && docker compose up -d
@@ -215,4 +229,9 @@ cd ../go-chi && go run .
 curl http://localhost:8080/
 ```
 
-Open <http://localhost:16686>, pick the `fun-with-flags-go-chi` service, and drill into a trace — the `feature_flag.evaluation` event on the request span carries the flag key, the selected variant and the reason for the match.
+Open Grafana at <http://localhost:3000> (login `admin` / `admin`).
+
+- **Traces** — Explore → Tempo, filter on service `fun-with-flags-go-chi`, drill into a trace. The `feature_flag.evaluation` event on the request span carries the flag key, the selected variant and the reason for the match.
+- **Metrics** — open the **Fun With Flags — Feature Flag Metrics** dashboard. Counts are broken down by `feature_flag.key`, `feature_flag.variant` and `reason`.
+
+The metrics exporter uses a 10s periodic reader, so the first data point shows up roughly 10–15 seconds after your first request — keep curling and the dashboard fills in.

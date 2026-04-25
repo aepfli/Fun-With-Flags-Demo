@@ -40,6 +40,12 @@ func Init(flagsPath string) error {
 	openfeature.AddHooks(hook.Custom{})
 	openfeature.AddHooks(otelhook.NewTracesHook())
 
+	metricsHook, err := otelhook.NewMetricsHook()
+	if err != nil {
+		return fmt.Errorf("build OTel metrics hook: %w", err)
+	}
+	openfeature.AddHooks(metricsHook)
+
 	openfeature.SetEvaluationContext(openfeature.NewEvaluationContext("", map[string]any{
 		"goVersion": strings.TrimPrefix(runtime.Version(), "go"),
 	}))
