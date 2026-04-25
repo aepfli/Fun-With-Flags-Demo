@@ -23,6 +23,13 @@ const FLAGD_URL = __ENV.FLAGD_URL || 'http://host.docker.internal:8014';
 // distribution panel in Grafana looks like real traffic, not a flat split.
 const LANGUAGES = ['de', 'de', 'de', 'en', 'en', 'fr', 'es', 'it', ''];
 
+// Generate a random user id per request. Step 7's `new_greeting_algo` flag
+// uses a fractional rollout that buckets on the OpenFeature targetingKey, so
+// without a stable per-request id every request would land in the same bucket.
+function randomUserId() {
+  return `user-${Math.floor(Math.random() * 100000)}`;
+}
+
 function isLoadgenActive() {
   const res = http.post(
     `${FLAGD_URL}/flagd.evaluation.v1.Service/ResolveBoolean`,
@@ -46,7 +53,10 @@ export default function () {
   }
 
   const lang = LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)];
-  const url = lang ? `${BASE_URL}/?language=${lang}` : `${BASE_URL}/`;
+  const userId = randomUserId();
+  const params = [`userId=${userId}`];
+  if (lang) params.push(`language=${lang}`);
+  const url = `${BASE_URL}/?${params.join('&')}`;
   http.get(url, { tags: { language: lang || 'default' } });
   sleep(0.1);
 }
