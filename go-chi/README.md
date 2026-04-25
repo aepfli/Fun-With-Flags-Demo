@@ -235,3 +235,72 @@ Open Grafana at <http://localhost:3000> (login `admin` / `admin`).
 - **Metrics** — open the **Fun With Flags — Feature Flag Metrics** dashboard. Counts are broken down by `feature_flag.key`, `feature_flag.variant` and `reason`.
 
 The metrics exporter uses a 10s periodic reader, so the first data point shows up roughly 10–15 seconds after your first request — keep curling and the dashboard fills in.
+
+## Step 7 Progressive rollout with fractional targeting
+
+Deploy and release should not be the same event. The previous steps wired all the plumbing — flagd, hooks, traces, metrics — so this step is where it pays off. We pretend a "new greeting algorithm" is being rolled out: it is slower (200ms latency) and 10% of requests fail. The new code ships behind a flag, the rollout is dialled up by editing `flags.json`, and a regression triggers a rollback without redeploying.
+
+The handler reads `new_greeting_algo` and, when it is on, simulates the bad behaviour:
+
+```go
+newAlgo, _ := client.BooleanValue(r.Context(), "new_greeting_algo", false, openfeature.EvaluationContext{})
+if newAlgo {
+    time.Sleep(200 * time.Millisecond)
+    if rand.Float64() < 0.1 {
+        http.Error(w, "simulated failure in new_greeting_algo", http.StatusInternalServerError)
+        return
+    }
+}
+```
+
+Fractional targeting buckets users by a stable key, so the same `userId` keeps getting the same variant for the whole rollout. The middleware now reads `userId` from the query string and uses it as the targeting key on the evaluation context:
+
+```go
+userId := r.URL.Query().Get("userId")
+var ec openfeature.EvaluationContext
+if userId != "" {
+    ec = openfeature.NewEvaluationContext(userId, attrs)
+} else {
+    ec = openfeature.NewTargetlessEvaluationContext(attrs)
+}
+ctx := openfeature.WithTransactionContext(r.Context(), ec)
+```
+
+The flag itself uses flagd's `fractional` operator on the implicit targeting key:
+
+```json
+"new_greeting_algo": {
+  "state": "ENABLED",
+  "variants": { "off": false, "on": true },
+  "defaultVariant": "off",
+  "targeting": {
+    "fractional": [
+      ["off", 100],
+      ["on", 0]
+    ]
+  }
+}
+```
+
+### Ramping the rollout
+
+Edit `flags.json` and change the weights — flagd reloads on file change, no restart needed:
+
+- 0% — `[["off", 100], ["on", 0]]` — baseline.
+- 10% — `[["off", 90], ["on", 10]]` — canary. Watch the dashboard for ten minutes.
+- 50% — `[["off", 50], ["on", 50]]` — half traffic on the new path.
+- 100% — `[["off", 0], ["on", 100]]` — full release.
+
+Generate traffic with different `userId`s so the bucketing actually splits:
+
+```
+for i in $(seq 1 200); do curl -s "http://localhost:8080/?userId=user-$i" > /dev/null; done
+```
+
+### What to watch in Grafana
+
+Open the **Fun With Flags — Feature Flag Metrics** dashboard. The `feature_flag.evaluation_*` counters break down by `feature_flag.key`, `feature_flag.variant` and `reason`, so you can see the `on` slice grow as you bump the percentage. In parallel watch the HTTP RED panels — request latency P95 will climb by ~200ms in proportion to the rollout, and the 5xx rate will track 10% of the `on` traffic.
+
+### Rolling back
+
+When the panels go red, set the weights back to `[["off", 100], ["on", 0]]` in `flags.json`. flagd picks it up within seconds, the next evaluation returns `off`, latency and errors drop. No deploy, no restart, and the revert lives in the same flag file you ramped from.

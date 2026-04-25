@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/open-feature/go-sdk/openfeature"
@@ -42,8 +44,16 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Language)
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		details, err := client.StringValueDetails(r.Context(), "greetings", "Hello World", openfeature.EvaluationContext{})
+	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		newAlgo, _ := client.BooleanValue(req.Context(), "new_greeting_algo", false, openfeature.EvaluationContext{})
+		if newAlgo {
+			time.Sleep(200 * time.Millisecond)
+			if rand.Float64() < 0.1 {
+				http.Error(w, "simulated failure in new_greeting_algo", http.StatusInternalServerError)
+				return
+			}
+		}
+		details, err := client.StringValueDetails(req.Context(), "greetings", "Hello World", openfeature.EvaluationContext{})
 		if err != nil {
 			slog.Error("evaluation failed", "err", err)
 		}
