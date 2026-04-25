@@ -11,6 +11,7 @@ from openfeature.contrib.hook.opentelemetry import TracingHook
 from openfeature.evaluation_context import EvaluationContext
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
+from app.metrics_hook import FeatureFlagMetricsHook
 from app.middleware import LanguageMiddleware, language_ctx
 from app.openfeature_setup import configure_openfeature, shutdown_openfeature
 from app.otel_setup import configure_otel
@@ -26,8 +27,9 @@ async def lifespan(_: FastAPI):
     """FastAPI lifespan — set provider + global context on startup, tear down on stop."""
     configure_otel()
     configure_openfeature()
-    # Register the OTel tracing hook so every flag evaluation becomes a span.
-    api.add_hooks([TracingHook()])
+    # OTel hooks: TracingHook emits a span per evaluation, the custom metrics
+    # hook bumps a counter labelled by flag/variant/reason.
+    api.add_hooks([TracingHook(), FeatureFlagMetricsHook()])
     try:
         yield
     finally:

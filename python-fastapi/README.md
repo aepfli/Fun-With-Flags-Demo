@@ -162,9 +162,9 @@ def flagd():
 
 Run `.venv/bin/pytest`. The container starts, tests pass, it shuts down.
 
-## Step 6 OpenTelemetry tracing
+## Step 6 OpenTelemetry traces and metrics
 
-A flag evaluation without tracing is a black box — you know what variant came out, but not which rule matched, not which endpoint asked, and not how long the resolution took. Wiring in OpenTelemetry turns every evaluation into a span and, once FastAPI itself is instrumented, that span lands under the HTTP request span that triggered it. Now the value, the variant, the reason, and the parent route all show up in the same Jaeger trace.
+A flag evaluation without telemetry is a black box — you know what variant came out, but not which rule matched, not which endpoint asked, and not how often each variant is being served. OpenTelemetry handles both halves of that question: every evaluation becomes a span (parented under the HTTP request span thanks to `FastAPIInstrumentor`), and a counter ticks up so you can chart evaluation rate by flag, variant, and reason.
 
 ```toml
 dependencies = [
@@ -176,28 +176,48 @@ dependencies = [
 ]
 ```
 
-OTel setup lives in [`app/otel_setup.py`](app/otel_setup.py) — a tracer provider tagged with the service name, and an OTLP/gRPC exporter pointed at the shared Jaeger from [`../observability`](../observability):
+OTel setup lives in [`app/otel_setup.py`](app/otel_setup.py) — a tracer provider and a meter provider, both tagged with the service name and both shipping OTLP/gRPC to the shared LGTM stack from [`../observability`](../observability):
 
 ```python
 resource = Resource.create({"service.name": "fun-with-flags-python-fastapi"})
+
 provider = TracerProvider(resource=resource)
 provider.add_span_processor(BatchSpanProcessor(
     OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
 ))
 trace.set_tracer_provider(provider)
+
+reader = PeriodicExportingMetricReader(
+    OTLPMetricExporter(endpoint="http://localhost:4317", insecure=True),
+    export_interval_millis=10_000,
+)
+metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
 ```
 
-Wired into [`app/main.py`](app/main.py): call it from `lifespan`, instrument the FastAPI app, register the OpenFeature OTel hook:
+`openfeature-hooks-opentelemetry` 0.3.1 only ships a `TracingHook`, so [`app/metrics_hook.py`](app/metrics_hook.py) supplies the metrics counterpart — a tiny `Hook` that bumps a counter on every `after()`:
+
+```python
+class FeatureFlagMetricsHook(Hook):
+    def after(self, hook_context, details, hints):
+        _eval_counter.add(1, {
+            "feature_flag.key": hook_context.flag_key,
+            "feature_flag.variant": details.variant or "",
+            "feature_flag.reason": str(details.reason) if details.reason is not None else "",
+        })
+```
+
+Wired into [`app/main.py`](app/main.py): call `configure_otel()` from `lifespan`, instrument the FastAPI app, register both hooks:
 
 ```python
 from openfeature.contrib.hook.opentelemetry import TracingHook
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from app.metrics_hook import FeatureFlagMetricsHook
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_otel()
     configure_openfeature()
-    api.add_hooks([TracingHook()])
+    api.add_hooks([TracingHook(), FeatureFlagMetricsHook()])
     yield
     shutdown_openfeature()
 
@@ -208,10 +228,13 @@ FastAPIInstrumentor.instrument_app(app)
 Run it end to end:
 
 ```bash
-cd ../observability && docker compose up -d     # shared Jaeger + OTLP collector
+cd ../observability && docker compose up -d     # shared LGTM stack (Grafana + Tempo + Mimir)
 cd -
 .venv/bin/uvicorn app.main:app
 curl http://localhost:8080/
 ```
 
-Open <http://localhost:16686>, pick the `fun-with-flags-python-fastapi` service, click a trace — the flag evaluation span sits under the request span, with the flag key, variant, and reason attached.
+Open Grafana at <http://localhost:3000> (login `admin` / `admin`):
+
+- **Traces** — *Explore → Tempo*, search for service `fun-with-flags-python-fastapi`. Each trace has the flag evaluation span sitting under the request span, with the flag key, variant, and reason attached.
+- **Metrics** — open the **Fun With Flags — Feature Flag Metrics** dashboard. The export interval is 10s, so the first datapoint shows up roughly 10–15s after the first request.
