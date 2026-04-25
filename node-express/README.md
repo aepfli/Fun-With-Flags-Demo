@@ -223,3 +223,87 @@ Open <http://localhost:3000> (login `admin` / `admin`):
 
 - **Traces**: Explore → pick the **Tempo** datasource → search for service `fun-with-flags-node-express`. You should see a request span with a child `feature_flag` span carrying `feature_flag.key`, `feature_flag.variant`, and `feature_flag.result.reason`.
 - **Metrics**: open the **Fun With Flags — Feature Flag Metrics** dashboard. Because the exporter flushes every 10 s, the first datapoint shows up after about 10–15 seconds of traffic.
+
+## Step 7 Progressive rollout of a new algorithm
+
+The previous steps gave us flags, context, and observability. Step 7 is the payoff: a real release scenario. We are about to swap in a *new greeting algorithm*. It is slower (200 ms per request) and, in this demo, fails 10% of the time. We want to ramp it from 0% to 10% to 50% of users, watch Grafana, and roll back from `flags.json` without redeploying.
+
+The handler reads a boolean flag and only takes the new path when it resolves to `true`:
+
+```js
+import { setTimeout as sleep } from 'node:timers/promises';
+
+app.get('/', async (_req, res) => {
+  const newAlgo = await client.getBooleanValue('new_greeting_algo', false);
+  if (newAlgo) {
+    await sleep(200);
+    if (Math.random() < 0.1) {
+      return res.status(500).json({ error: 'simulated failure in new_greeting_algo' });
+    }
+  }
+  const details = await client.getStringDetails('greetings', 'Hello World');
+  res.json(details);
+});
+```
+
+For a stable per-user ramp, the middleware also reads `userId` from the query string and sets it as `targetingKey` on the OpenFeature transaction context. `targetingKey` is the top-level field flagd's `fractional` operator hashes on, so the same user keeps getting the same variant across requests:
+
+```js
+export function languageMiddleware(req, _res, next) {
+  const language = req.query.language;
+  const userId = req.query.userId;
+  const ctx = { ...(language ? { language } : {}) };
+  if (userId) ctx.targetingKey = userId;
+  if (Object.keys(ctx).length > 0) {
+    OpenFeature.setTransactionContext(ctx, next);
+  } else {
+    next();
+  }
+}
+```
+
+`flags.json` defines the flag with a fractional rule that starts fully off:
+
+```json
+"new_greeting_algo": {
+  "state": "ENABLED",
+  "variants": { "off": false, "on": true },
+  "defaultVariant": "off",
+  "targeting": {
+    "fractional": [
+      ["off", 100],
+      ["on", 0]
+    ]
+  }
+}
+```
+
+### Ramp 0 → 10 → 50
+
+Drive traffic with varying `userId` values so the fractional bucketing has something to split:
+
+```
+for i in $(seq 1 200); do curl -s "http://localhost:8080/?userId=user-$i" >/dev/null; done
+```
+
+Then edit `flags.json` and bump the split — flagd in-process picks up file changes without a restart:
+
+```json
+"fractional": [["off", 90], ["on", 10]]
+```
+
+Re-run the loop, then push to 50/50:
+
+```json
+"fractional": [["off", 50], ["on", 50]]
+```
+
+### Watch Grafana
+
+- **Tempo**: filter spans by service `fun-with-flags-node-express`. Requests where `feature_flag.variant = "on"` should show ~200 ms higher latency, and a slice of them will be 5xx.
+- **Prometheus / dashboard**: the *Feature Flag Metrics* dashboard splits the evaluation counter by variant. The `on` line should rise from zero to roughly the configured percentage of total evaluations.
+- p95 latency on `/` and the HTTP 5xx rate are the two SLO-style panels to watch — they are what would page you in a real rollout.
+
+### Roll back
+
+If the dashboards turn red, set the split back to `100 / 0` in `flags.json` and save. flagd reloads, the next request resolves `off` again, and the slow path is gone — no redeploy, no restart.

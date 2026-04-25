@@ -17,6 +17,17 @@
           "hallo"
         ]
       }
+    },
+    "new_greeting_algo": {
+      "state": "ENABLED",
+      "variants": { "off": false, "on": true },
+      "defaultVariant": "off",
+      "targeting": {
+        "fractional": [
+          ["off", 100],
+          ["on", 0]
+        ]
+      }
     }
   }
 }

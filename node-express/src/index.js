@@ -2,6 +2,7 @@
 // Express/HTTP before they are required below.
 import './otel.js';
 
+import { setTimeout as sleep } from 'node:timers/promises';
 import express from 'express';
 import { OpenFeature } from '@openfeature/server-sdk';
 import pino from 'pino';
@@ -19,6 +20,15 @@ export async function createApp() {
   const client = OpenFeature.getClient();
 
   app.get('/', async (_req, res) => {
+    const newAlgo = await client.getBooleanValue('new_greeting_algo', false);
+    if (newAlgo) {
+      // Simulate a slower path on the new algorithm and inject a 10% error
+      // rate so progressive rollout has something to react to.
+      await sleep(200);
+      if (Math.random() < 0.1) {
+        return res.status(500).json({ error: 'simulated failure in new_greeting_algo' });
+      }
+    }
     const details = await client.getStringDetails('greetings', 'Hello World');
     res.json(details);
   });
