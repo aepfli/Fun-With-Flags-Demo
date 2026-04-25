@@ -1,5 +1,7 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-grpc';
+import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
@@ -12,12 +14,16 @@ const sdk = new NodeSDK({
     [ATTR_SERVICE_NAME]: 'fun-with-flags-node-express',
   }),
   traceExporter: new OTLPTraceExporter({ url: 'http://localhost:4317' }),
+  metricReader: new PeriodicExportingMetricReader({
+    exporter: new OTLPMetricExporter({ url: 'http://localhost:4317' }),
+    exportIntervalMillis: 10_000,
+  }),
   instrumentations: [getNodeAutoInstrumentations()],
 });
 
 sdk.start();
 
-// Flush pending spans on SIGTERM so the Jaeger UI shows the last request.
+// Flush pending spans and metrics on SIGTERM so the LGTM stack shows the last request.
 process.on('SIGTERM', () => {
   sdk
     .shutdown()

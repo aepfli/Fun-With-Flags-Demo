@@ -154,22 +154,25 @@ const container = await new GenericContainer('ghcr.io/open-feature/flagd:latest'
 
 Run `npm test`. Vitest starts the container, runs the assertions against `?language=de` and the default greeting, and shuts the container down.
 
-## Step 6 OpenTelemetry tracing
+## Step 6 OpenTelemetry traces and metrics
 
-Logs from the custom hook are fine for local debugging, but once you have more than one service you want traces. This step wires OpenTelemetry into the app so every flag evaluation shows up as a span in Jaeger with the flag key, variant, and reason attached — nested underneath the Express request span so you can see exactly which handler asked for the flag. Auto-instrumentation covers Express and HTTP; the OpenFeature OTel hook handles the flag spans.
+Logs from the custom hook are fine for local debugging, but once you have more than one service you want traces *and* metrics. This step wires OpenTelemetry into the app so every flag evaluation shows up both as a span (with the flag key, variant, and reason, nested under the Express request span) and as a counter on the OTel metrics pipeline. The shared `observability/` stack is Grafana + Tempo + Prometheus (the LGTM bundle), so both signals land in the same UI.
 
 ```
-npm install @opentelemetry/api @opentelemetry/sdk-node \
+npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/sdk-metrics \
             @opentelemetry/auto-instrumentations-node \
             @opentelemetry/exporter-trace-otlp-grpc \
+            @opentelemetry/exporter-metrics-otlp-grpc \
             @openfeature/open-telemetry-hooks
 ```
 
-`src/otel.js` boots the SDK and points the OTLP/gRPC exporter at the shared Jaeger collector:
+`src/otel.js` boots the SDK and points both OTLP/gRPC exporters at the shared collector. The `PeriodicExportingMetricReader` flushes metrics every 10 seconds, so the first datapoint shows up roughly 10–15 seconds after the first request:
 
 ```js
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-grpc';
+import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
@@ -179,6 +182,10 @@ const sdk = new NodeSDK({
     [ATTR_SERVICE_NAME]: 'fun-with-flags-node-express',
   }),
   traceExporter: new OTLPTraceExporter({ url: 'http://localhost:4317' }),
+  metricReader: new PeriodicExportingMetricReader({
+    exporter: new OTLPMetricExporter({ url: 'http://localhost:4317' }),
+    exportIntervalMillis: 10_000,
+  }),
   instrumentations: [getNodeAutoInstrumentations()],
 });
 
@@ -194,21 +201,25 @@ import express from 'express';
 // …rest of the imports
 ```
 
-Register the OpenFeature OTel span hook alongside the existing custom hook in `src/openfeature.js`:
+Register both OpenFeature OTel hooks alongside the existing custom hook in `src/openfeature.js`. `SpanHook` produces a span per evaluation; `MetricsHook` increments an evaluation counter labeled with key/variant/reason:
 
 ```js
-import { SpanHook } from '@openfeature/open-telemetry-hooks';
+import { SpanHook, MetricsHook } from '@openfeature/open-telemetry-hooks';
 
 OpenFeature.addHooks(new CustomHook());
 OpenFeature.addHooks(new SpanHook());
+OpenFeature.addHooks(new MetricsHook());
 ```
 
 Run it:
 
 ```
-cd ../observability && docker compose up -d   # Jaeger + OTLP collector on :4317
+cd ../observability && docker compose up -d   # Grafana LGTM stack, OTLP on :4317
 cd ../node-express && node src/index.js
 curl http://localhost:8080/
 ```
 
-Open <http://localhost:16686>, pick the `fun-with-flags-node-express` service from the dropdown, and you should see a request span with a child `feature_flag` span carrying `feature_flag.key`, `feature_flag.variant`, and `feature_flag.result.reason`.
+Open <http://localhost:3000> (login `admin` / `admin`):
+
+- **Traces**: Explore → pick the **Tempo** datasource → search for service `fun-with-flags-node-express`. You should see a request span with a child `feature_flag` span carrying `feature_flag.key`, `feature_flag.variant`, and `feature_flag.result.reason`.
+- **Metrics**: open the **Fun With Flags — Feature Flag Metrics** dashboard. Because the exporter flushes every 10 s, the first datapoint shows up after about 10–15 seconds of traffic.
