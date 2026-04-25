@@ -185,9 +185,9 @@ class FlagdIntegrationTest {
 
 Run `./mvnw verify` — the container starts, the test passes, the container stops. No second terminal.
 
-## Step 6 OpenTelemetry tracing
+## Step 6 OpenTelemetry traces and metrics
 
-Hooks are a nice place to log flag evaluations, but logs only tell part of the story. Once requests start fanning out across services, what I really want is a trace that shows each flag evaluation as a span nested inside the HTTP request that caused it. OpenFeature ships an OTel hook for exactly that, and Quarkus ships an OTel extension that wires up the SDK, the OTLP exporter, and HTTP instrumentation out of the box — so flag spans become children of the request span with almost no code.
+Hooks are a nice place to log flag evaluations, but logs only tell part of the story. Once requests start fanning out across services, I want two things: a trace that shows each flag evaluation as a span nested inside the HTTP request that caused it, and metrics that count evaluations by flag key, variant, and reason so I can spot regressions on a dashboard. OpenFeature ships an OTel hook for each signal — `TracesHook` and `MetricsHook` — and Quarkus's `quarkus-opentelemetry` extension wires up the tracer and meter providers plus the OTLP exporter out of the box.
 
 Add the Quarkus OTel extension and the OpenFeature OTel hook to `pom.xml`:
 
@@ -203,28 +203,36 @@ Add the Quarkus OTel extension and the OpenFeature OTel hook to `pom.xml`:
 </dependency>
 ```
 
-Point the exporter at the shared Jaeger in `src/main/resources/application.properties`:
+Point the exporter at the shared LGTM stack in `src/main/resources/application.properties` and turn metrics on:
 
 ```properties
 quarkus.application.name=fun-with-flags-java-quarkus
-quarkus.otel.exporter.otlp.traces.endpoint=http://localhost:4317
-quarkus.otel.exporter.otlp.traces.protocol=grpc
+quarkus.otel.exporter.otlp.endpoint=http://localhost:4317
+quarkus.otel.exporter.otlp.protocol=grpc
+quarkus.otel.metrics.enabled=true
+quarkus.otel.metric.export.interval=10s
 ```
 
-Register the hook alongside the existing `CustomHook` in `OpenFeatureStartup.initProvider()`:
+Register both hooks alongside the existing `CustomHook` in `OpenFeatureStartup.initProvider()`. `MetricsHook` needs the `OpenTelemetry` instance — Quarkus produces one via CDI, so inject it with `@Inject OpenTelemetry openTelemetry`:
 
 ```java
 api.addHooks(new CustomHook());
 api.addHooks(new TracesHook());
+api.addHooks(new MetricsHook(openTelemetry));
 ```
 
-> Note: the 3.x line of the OTel hook renamed `OpenTelemetryHook` to `TracesHook` (and added a sibling `MetricsHook`). If you are pinning an older 1.x version, the class is still `OpenTelemetryHook`.
+> Note: the 3.x line of the OTel hook renamed `OpenTelemetryHook` to `TracesHook` and added the sibling `MetricsHook`. If you are pinning an older 1.x version, the class is still `OpenTelemetryHook`.
 
-Start the shared Jaeger backend, then run the app:
+Start the shared LGTM backend (Grafana + Loki + Tempo + Mimir), then run the app:
 
 ```bash
 cd ../observability && docker compose up -d
 cd ../java-quarkus && ./mvnw quarkus:dev
 ```
 
-Hit `curl http://localhost:8080/` a few times, open <http://localhost:16686>, pick the `fun-with-flags-java-quarkus` service, and you will see each HTTP request with a nested flag-evaluation span carrying the flag key, variant, and reason as attributes.
+Hit `curl http://localhost:8080/` a few times, then open Grafana at <http://localhost:3000> (login `admin` / `admin`). Two views to look at:
+
+- **Traces** — go to **Explore → Tempo**, pick the `fun-with-flags-java-quarkus` service, and you will see each HTTP request with a nested flag-evaluation span carrying the flag key, variant, and reason as attributes.
+- **Metrics** — open the **Fun With Flags — Feature Flag Metrics** dashboard for evaluation counts broken down by flag key, variant, and reason.
+
+Metrics export on a 10s interval, so expect a 10–15s delay between the first request and the first datapoint showing up on the dashboard.

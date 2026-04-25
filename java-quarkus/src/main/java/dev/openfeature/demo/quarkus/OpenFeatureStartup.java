@@ -1,5 +1,6 @@
 package dev.openfeature.demo.quarkus;
 
+import dev.openfeature.contrib.hooks.otel.MetricsHook;
 import dev.openfeature.contrib.hooks.otel.TracesHook;
 import dev.openfeature.contrib.providers.flagd.Config;
 import dev.openfeature.contrib.providers.flagd.FlagdOptions;
@@ -8,15 +9,20 @@ import dev.openfeature.sdk.ImmutableContext;
 import dev.openfeature.sdk.OpenFeatureAPI;
 import dev.openfeature.sdk.ThreadLocalTransactionContextPropagator;
 import dev.openfeature.sdk.Value;
+import io.opentelemetry.api.OpenTelemetry;
 import io.quarkus.runtime.Startup;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.util.HashMap;
 
 @Startup
 @ApplicationScoped
 public class OpenFeatureStartup {
+
+    @Inject
+    OpenTelemetry openTelemetry;
 
     @PostConstruct
     public void initProvider() {
@@ -41,5 +47,6 @@ public class OpenFeatureStartup {
         api.setTransactionContextPropagator(new ThreadLocalTransactionContextPropagator());
         api.addHooks(new CustomHook());
         api.addHooks(new TracesHook());
+        api.addHooks(new MetricsHook(openTelemetry));
     }
 }
