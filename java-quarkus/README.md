@@ -190,3 +190,7 @@ Run `./mvnw verify` — the container starts, the test passes, the container sto
 Every flag evaluation becomes a span in Tempo, nested under the HTTP request span that triggered it. The code lives on [`step/java-quarkus/6`](https://github.com/aepfli/Fun-With-Flags-Demo/tree/step/java-quarkus/6); the shared Grafana LGTM container lives in [`../observability/`](../observability/README.md).
 
 Run `cd ../observability && docker compose up -d`, check out `step/java-quarkus/6`, and start the app with `./mvnw quarkus:dev`. Grafana UI at <http://localhost:3000>, open the **Fun With Flags — Feature Flag Metrics** dashboard or use Explore → Tempo to pick the `fun-with-flags-java-quarkus` service.
+
+## Step 7 Load generation
+
+Once you've got step 6 wired up, the dashboard is empty until something drives traffic. The shared [`../loadgen/`](../loadgen/README.md) folder runs a small k6 container that hits `GET /` with a mix of `language` values — **but only while the OpenFeature flag `loadgen_active` is set to `on`**. The flag is already in this folder's `flags.json` (`defaultVariant: "off"`); flip it to `"on"`, the dashboard fills, flip back to idle the load. The feature-flag demo, feature-flagged.

@@ -1,0 +1,16 @@
+services:
+  k6:
+    image: grafana/k6:latest
+    container_name: fun-with-flags-loadgen
+    command: ["run", "--quiet", "/scripts/script.js"]
+    volumes:
+      - ./k6:/scripts:ro
+    environment:
+      # Override either of these from the host with `BASE_URL=... docker compose up -d`.
+      - BASE_URL=${BASE_URL:-http://host.docker.internal:8080}
+      - FLAGD_URL=${FLAGD_URL:-http://host.docker.internal:8014}
+    extra_hosts:
+      # Lets host.docker.internal resolve on Linux too, so this works in
+      # Codespaces and on any Linux Docker daemon, not just Docker Desktop.
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

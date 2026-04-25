@@ -32,6 +32,14 @@
           "hallo"
         ]
       }
+    },
+    "loadgen_active": {
+      "state": "ENABLED",
+      "variants": {
+        "off": false,
+        "on": true
+      },
+      "defaultVariant": "off"
     }
   }
 }

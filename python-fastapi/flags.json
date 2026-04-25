@@ -11,12 +11,35 @@
       "defaultVariant": "hello",
       "targeting": {
         "if": [
-          { "sem_ver": [ { "var": "pythonVersion" }, ">=", "3.10.0" ] },
+          {
+            "sem_ver": [
+              {
+                "var": "pythonVersion"
+              },
+              ">=",
+              "3.10.0"
+            ]
+          },
           "pythonista",
-          { "===": [ { "var": "language" }, "de" ] },
+          {
+            "===": [
+              {
+                "var": "language"
+              },
+              "de"
+            ]
+          },
           "hallo"
         ]
       }
+    },
+    "loadgen_active": {
+      "state": "ENABLED",
+      "variants": {
+        "off": false,
+        "on": true
+      },
+      "defaultVariant": "off"
     }
   }
 }
