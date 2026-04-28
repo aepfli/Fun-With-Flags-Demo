@@ -1,12 +1,12 @@
 # OpenFeature Spring Boot Demo
 
-This is a little Spring Boot Demo applitcation for OpenFeature.
+This is a little Spring Boot Demo application for OpenFeature.
 
 Follow each Step and see how OpenFeature can be used within a Spring Boot Application
 
-Within [reqeuests.http](requests.http) you will find requests for each section to play with.
+Within [requests.http](requests.http) you will find requests for each section to play with.
 
-> Note: There will be a branch for each step - within the near future. Currently there is only `step/4` which is the end state
+> Each numbered step lives on its own branch — `step/java-spring/1.1`, `1.2`, `2.1`, `3.1`, `3.1.1`, `3.2`, `4`, `5.1`, `5.2`, `6`, `7`. `main` carries the full end state. Check out a step branch to see the codebase at that point.
 
 ## Step 1 Basic OpenFeature Setup
 
@@ -389,17 +389,18 @@ So let's use flagd as a standalone process to fetch feature flag configurations.
    ```
 
 2. We can start the docker container with `docker compose up` within a terminal.
-3. Let's change the flagd provider mode to either `RPC` or `IN_PROCESS`
+3. Let's change the flagd provider mode to either `RPC` or `IN_PROCESS`. Both talk to the running flagd container — no `offlineFlagSourcePath` needed (that's a `FILE` mode option, where the SDK reads `flags.json` directly without flagd):
    ```java
    FlagdOptions flagdOptions = FlagdOptions.builder()
-          .resolverType(Config.Resolver.RPC)
-          .offlineFlagSourcePath("./flags.json")
+          .resolverType(Config.Resolver.RPC)   // or Config.Resolver.IN_PROCESS
+          .host("localhost")
+          .port(8013)                          // 8015 for IN_PROCESS
           .build();
    ```
 
-There are two different behaviours we can observe depending on the mode
-- RPC: everytime we evaluate a flag, we will query flagd for the evaluation.
-- IN_PROCESS: we will be fetching the flag configuration, and only if there is an update to the flags.json, we will get a change event.
+There are two different behaviours we can observe depending on the mode:
+- **RPC**: every flag evaluation makes one gRPC round-trip to flagd on `:8013`.
+- **IN_PROCESS**: the SDK opens a sync stream to flagd on `:8015`; flagd pushes the full flag set into the JVM, and evaluations happen locally with no per-call hop. When flagd notices `flags.json` change on disk, it streams the update to the SDK, which fires a change event.
 
 ## Step 6 OpenTelemetry observability
 

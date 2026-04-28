@@ -136,7 +136,7 @@ File mode is fine for demos. In real deployments flagd runs as its own process. 
 const provider = new FlagdProvider({ resolverType: 'rpc', host: 'localhost', port: 8013 });
 ```
 
-RPC calls flagd on every evaluation. `in-process` with a remote source fetches the flag set and watches for updates — cheaper for hot paths.
+RPC calls flagd on every evaluation. `in-process` mode pointed at the same flagd container (`port: 8015`, the sync stream) opens a subscription instead — flagd pushes the flag set into the SDK and evaluations stay local. Cheaper for hot paths.
 
 ## Step 5.2 Testing against flagd without docker compose
 

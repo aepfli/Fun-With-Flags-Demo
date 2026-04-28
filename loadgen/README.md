@@ -10,7 +10,7 @@ In Codespaces, this also means the loadgen container can stay up the whole sessi
 
 ## How it works
 
-1. The k6 container reads the flag `loadgen_active` from flagd's HTTP evaluation API on `:8014`.
+1. The k6 container reads the flag `loadgen_active` from flagd's eval API on `:8013` (flagd serves both gRPC and HTTP/JSON on this port via cmux, so a plain `curl`-style `POST` works).
 2. While the flag is `false` (default), each VU sleeps two seconds and polls again.
 3. While the flag is `true`, each VU hits the language variant's `GET /` with a random `language` query parameter pulled from a deliberately uneven pool (more `de`, some `en`, a bit of everything else).
 4. Five virtual users by default — enough to populate the Grafana dashboard, light enough to stay readable.
@@ -52,7 +52,7 @@ To stop the load: flip back to `"off"`. The k6 container stays up, idle.
 By default the script hits `host.docker.internal:8080` (the language app's port). If you're running the app on a different host, override:
 
 ```
-BASE_URL=http://my-app:8080 FLAGD_URL=http://my-flagd:8014 docker compose up -d
+BASE_URL=http://my-app:8080 FLAGD_URL=http://my-flagd:8013 docker compose up -d
 ```
 
 ## Stop everything

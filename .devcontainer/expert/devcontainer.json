@@ -17,16 +17,16 @@
       "label": "App"
     },
     "8013": {
-      "label": "flagd gRPC"
+      "label": "flagd gRPC eval"
     },
     "8014": {
-      "label": "flagd HTTP"
+      "label": "flagd management/metrics"
     },
     "8015": {
-      "label": "flagd sync"
+      "label": "flagd sync (IN_PROCESS)"
     },
     "8016": {
-      "label": "flagd sync"
+      "label": "flagd OFREP"
     },
     "3000": {
       "label": "Grafana"

@@ -8,7 +8,7 @@ services:
     environment:
       # Override either of these from the host with `BASE_URL=... docker compose up -d`.
       - BASE_URL=${BASE_URL:-http://host.docker.internal:8080}
-      - FLAGD_URL=${FLAGD_URL:-http://host.docker.internal:8014}
+      - FLAGD_URL=${FLAGD_URL:-http://host.docker.internal:8013}
     extra_hosts:
       # Lets host.docker.internal resolve on Linux too, so this works in
       # Codespaces and on any Linux Docker daemon, not just Docker Desktop.

@@ -33,7 +33,7 @@ The demo is a three-act adventure. Each phase is a separate Codespaces config so
 
 Click a Codespaces badge above to launch the matching environment. Locally: clone the repo, then in VS Code run **Dev Containers: Reopen in Container** and pick the phase from the prompt.
 
-Port `8080` is the app. `8013`–`8016` are flagd (gRPC, HTTP, sync). `3000` is Grafana. `4317` / `4318` are the OTLP receivers. Each phase forwards only the ports it needs.
+Port `8080` is the app. `8013` is flagd's gRPC eval (the gRPC-Gateway HTTP/JSON paths ride on the same port via cmux); `8014` is flagd management — Prometheus `/metrics`, `/healthz`, `/readyz`; `8015` is the sync gRPC stream that powers `IN_PROCESS`; `8016` is flagd's OFREP HTTP eval API. `3000` is Grafana. `4317` / `4318` are the OTLP receivers. Each phase forwards only the ports it needs.
 
 ## Slides
 
