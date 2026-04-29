@@ -39,19 +39,13 @@ Port `8080` is the app. `8013` is flagd's gRPC eval (the gRPC-Gateway HTTP/JSON 
 
 The canonical, always-current deck lives at **<https://schrottner.at/openFeatureTalk>**. A snapshot is checked in as [`Fun with Flags.pdf`](Fun%20with%20Flags.pdf) at the repo root for workshops where the wifi does not cooperate.
 
-## Step 6 — observability
+## Shared infrastructure
 
-Step 6 adds OpenTelemetry traces *and* metrics so every flag evaluation shows up alongside the rest of the app's telemetry. A single [`observability/`](observability/README.md) folder at the repo root holds a Grafana LGTM container — Grafana, Prometheus, Tempo, Loki, OTLP receivers, all in one image. One backend for every variant, one URL (<http://localhost:3000>) to open. Each language's step 6 lives on `step/<folder>/6` and adds the OTel hooks + exporter config.
+Most of the journey lives per-language inside `<language>-<framework>/`, but two cross-cutting folders sit at the repo root because they're identical regardless of which stack you picked:
 
-The legacy `demo/with-tracking` branch is kept around for anyone who bookmarked it, but the step-6 branches supersede it.
+- **[`observability/`](observability/README.md)** — a Grafana LGTM container (Grafana, Prometheus, Tempo, Loki, OTLP receivers, all one image). One backend for every variant, one URL (<http://localhost:3000>) to open. Used by **step 6**, where each `step/<folder>/6` branch adds the OpenTelemetry hooks + exporter config so every flag evaluation lands in Tempo and Prometheus alongside the rest of the app's telemetry.
+- **[`loadgen/`](loadgen/README.md)** — a k6 container that drives traffic against whichever language variant you're running, **gated by the `loadgen_active` OpenFeature flag** (the demo is itself feature-flagged at the lever you're learning about — flip to start, flip to stop). Used by **step 7**, where each `step/<folder>/7` branch adds the deliberately-bad `new_greeting_algo` (200 ms slower, 10% errors) and reads `?userId=…` as the OpenFeature `targetingKey` so the fractional rollout buckets are stable per user.
 
-## Step 7 — progressive rollout with consequences
+The per-language READMEs walk the step-by-step operational story for both — start there for the recipe (ramp the percentage in `flags.json`, watch the HTTP latency and 5xx panels respond, roll back the second something looks bad).
 
-A new greeting algorithm is rolling out. It is slower (200ms) and 10% of the time it errors. Step 7's job is to roll it out gradually, watch what happens in Grafana, and roll back without redeploying.
-
-Two moving parts:
-
-- **[`loadgen/`](loadgen/README.md)** — k6 container that drives traffic, **gated by an OpenFeature flag** (`loadgen_active`). Flip the flag, the load runs; flip it back, it idles. The feature-flag demo is itself feature-flagged.
-- **`step/<folder>/7`** branches — per-language code change adding `new_greeting_algo` (slow + error path) and reading `?userId=…` as the OpenFeature `targetingKey` so the fractional rollout buckets are stable per user.
-
-Each language's README walks the operational story: ramp the percentage in `flags.json`, watch the HTTP latency and 5xx panels respond, roll back the second something looks bad.
+> The legacy `demo/with-tracking` branch is kept around for anyone who bookmarked it, but `step/<folder>/6` supersedes it.
